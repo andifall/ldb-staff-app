@@ -8,6 +8,15 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <title>Laughing Dog - Staff & Management</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Laughing Dog" />
+<meta name="application-name" content="Laughing Dog" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@500;600;700;800&family=Montserrat:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -110,6 +119,26 @@
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--bark);color:var(--cream);
     padding:12px 18px;border-radius:999px;font-size:14px;box-shadow:var(--shadow-lg);z-index:50;opacity:0;transition:opacity .2s}
   .toast.show{opacity:1}
+  .ld-inst{position:fixed;inset:0;z-index:120;background:rgba(61,43,31,.62);display:flex;align-items:flex-end;justify-content:center;
+    padding:16px;opacity:0;transition:opacity .22s;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+  .ld-inst.show{opacity:1}
+  .ld-inst-card{background:var(--cream);border-radius:22px;max-width:440px;width:100%;padding:22px 22px 18px;
+    box-shadow:var(--shadow-lg);transform:translateY(14px);transition:transform .22s;max-height:92vh;overflow:auto}
+  .ld-inst.show .ld-inst-card{transform:none}
+  .ld-inst-logo{background:var(--bark);border-radius:16px;padding:14px 18px;display:flex;justify-content:center;margin-bottom:16px}
+  .ld-inst-logo img{height:30px;width:auto;display:block}
+  .ld-inst h2{font-family:var(--head);font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--bark);
+    font-size:21px;margin:0 0 4px;text-align:center}
+  .ld-inst p.lead{color:var(--bark70);font-size:14px;margin:0 0 16px;text-align:center}
+  .ld-inst .os{border:1px solid var(--bark15);border-radius:14px;padding:14px 16px;margin-bottom:12px;background:#fff}
+  .ld-inst .os h3{font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:13px;
+    color:var(--bark);margin:0 0 8px}
+  .ld-inst .os ol{margin:0;padding-left:20px;color:var(--bark);font-size:14px}
+  .ld-inst .os ol li{margin:5px 0}
+  .ld-inst .os .k{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 5px;
+    border-radius:6px;background:var(--blush);border:1px solid var(--bark15);font-weight:600;vertical-align:-4px}
+  .ld-inst button.done{width:100%;margin-top:6px;padding:14px;font-family:var(--head);font-weight:700;text-transform:uppercase;
+    letter-spacing:.06em;font-size:15px;border:none;border-radius:12px;background:var(--bark);color:var(--cream);cursor:pointer}
   .center{min-height:74vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
   .center .big{font-family:var(--head);font-size:26px;color:var(--bark);font-weight:800;text-transform:uppercase;letter-spacing:.02em;margin:16px 0 6px}
   .choice{display:flex;gap:14px;width:100%;max-width:360px;margin-top:24px}
@@ -233,7 +262,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27m";
+const BUILD = "2026.07.27n";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -312,26 +341,26 @@ const FORMS = {
       {type:"text",key:"name",label:"Name",required:true},
     ],
     Worthing:[
-      {type:"section",label:"Opening clean & pest check"},
-      {type:"checklist",key:"pest",items:["Checked all food/drink surfaces, floors and behind units (fridges etc.) for mouse droppings"]},
-      {type:"file",key:"pest_photo",label:"Upload photo(s) of droppings",optional:true},
-      {type:"number",key:"droppings_count",label:"How many droppings in total? (roughly)",optional:true},
+      {type:"section",label:"Start of Day Clean List"},
+      {type:"checklist",key:"pest",items:["Check all food/drink surfaces for mouse droppings. If found, please take a photo(s) and upload below. This includes the kitchen, the floors, behind units (fridges etc)."]},
+      {type:"file",key:"pest_photo",label:"Upload image(s) of droppings",optional:true},
+      {type:"number",key:"droppings_count",label:"How many droppings in total were found? (roughly)",optional:true},
       {type:"text",key:"droppings_where",label:"In which locations were the droppings found?",optional:true},
-      {type:"section",label:"Temperatures (°C)"},
+      {type:"section",label:"Temperatures!"},
       {type:"temps",key:"temps",units:[
         {name:"Fridge 1",kind:"fridge"},{name:"Fridge 2",kind:"fridge"},{name:"Fridge 3",kind:"fridge"},
         {name:"Fridge 4",kind:"fridge"},{name:"Fridge 5",kind:"fridge"},
         {name:"Freezer 1",kind:"freezer"},{name:"Freezer 2",kind:"freezer"},{name:"Freezer 3",kind:"freezer"},
       ]},
-      {type:"section",label:"Opening checklist"},
+      {type:"section",label:"After you have checked the property for Mouse droppings"},
       {type:"checklist",key:"tasks",items:[
-        "Antibac all food/drink surfaces, then throw away the cloth",
-        "Check dates on all cakes/food; discard anything not labelled or out of date",
-        "Take out food/cakes (check the Use By / Length of Life)",
-        "Turn on all units and dial in the coffee machine",
-        "Make sure water runs hot within one minute at all stations",
-        "Soap and ample blue roll at each handwashing station (replenish if not)",
-        "Kitchen: wash all food prep surfaces with hot soapy water and antibac before any duties; discard cloth/sponge after",
+        "Antibac all food/drink surfaces. Then THROW AWAY the cloth.",
+        "Check dates on all cakes/food to ensure they are okay to sell. Discard any items NOT labelled or O.O.D.",
+        "Take out food/cakes. Please address the Use By form to see if anything needs disposing of.",
+        "Turn on all units that need turning on and dial in the coffee machine.",
+        "Make sure the water from all stations is running hot within one minute of turning on the tap",
+        "Make sure there is soap on each handwashing station as well as ample blue roll for drying hands. If not, replenish straight away.",
+        "KITCHEN: Ensure ALL food preperation surfaces are washed down with hot, soapy water and sprayed with antibac BEFORE carrying out any kitchen duties. Discard cloth/sponge after usage.",
       ]},
       {type:"textarea",key:"notes",label:"Any problems or changes - what did you do?",optional:true},
       {type:"text",key:"name",label:"Name",required:true},
@@ -430,36 +459,35 @@ const FORMS = {
       {type:"signature",key:"signature",label:"Signature",required:true},
     ],
     Worthing:[
-      {type:"section",label:"Closing clean & pest check"},
-      {type:"checklist",key:"pest",items:["Checked all food/drink surfaces, floors and behind units (fridges etc.) for pest droppings"]},
-      {type:"file",key:"pest_photo",label:"Upload photo(s) of droppings",optional:true},
-      {type:"number",key:"droppings_count",label:"How many droppings in total? (roughly)",optional:true},
+      {type:"section",label:"End of Day Clean List"},
+      {type:"checklist",key:"pest",items:["Check all food/drink surfaces for pest droppings. If found, please take a photo(s) and upload below. This includes the kitchen, the floors, behind units (fridges etc)."]},
+      {type:"file",key:"pest_photo",label:"Upload image(s) of droppings",optional:true},
+      {type:"number",key:"droppings_count",label:"How many droppings in total were found? (roughly)",optional:true},
       {type:"text",key:"droppings_where",label:"In which locations were the droppings found?",optional:true},
-      {type:"section",label:"Temperatures (°C)"},
+      {type:"section",label:"Temperatures"},
       {type:"temps",key:"temps",units:[
         {name:"Fridge 1",kind:"fridge"},{name:"Fridge 2",kind:"fridge"},{name:"Fridge 3",kind:"fridge"},
         {name:"Fridge 4",kind:"fridge"},{name:"Fridge 5",kind:"fridge"},
         {name:"Freezer 1",kind:"freezer"},{name:"Freezer 2",kind:"freezer"},{name:"Freezer 3",kind:"freezer"},
       ]},
-      {type:"section",label:"Closing checklist"},
+      {type:"section",label:"After you have checked the property for pests"},
       {type:"checklist",key:"tasks",items:[
-        "After photographing any droppings, put on gloves and clean the area thoroughly with antibac",
-        "Antibac all food/drink surfaces, then throw away the cloth",
-        "Clean all sinks and disinfect with antibac",
-        "Soap on each handwashing station (replenish if not)",
-        "Do temps",
-        "Box up food/cakes (check the Use By / Length of Life)",
-        "Turn off all units; turn off coffee machine then open the wands to release air pressure",
-        "Take out all bins and replace with bin liners",
-        "Box any food up",
-        "Clean all tables thoroughly",
-        "Turn off dishwasher, remove and wash the filter",
-        "Re-stock drinks",
-        "Turn off all lights & music",
+        "After you have taken a photo of the droppings, put on gloves and clean with antibac the area thoroughly.",
+        "Antibac all food/drink surfaces. Then THROW AWAY the cloth.",
+        "Clean all sinks and disinfect with antibac.",
+        "Make sure there is soap on each handwashing station. If not, replenish.",
+        "Do Temps.",
+        "Box up food/cakes. Please address the Use By form to see if anything needs disposing of.",
+        "Turn off all units. Turn off coffee machine and then open the wands to release air pressure.",
+        "Take out all bins and replace with bin liners.",
+        "Box any food up in boxes.",
+        "Make sure all tables have been cleaned thoroughly.",
+        "Turn off dishwasher, remove & wash through the filter.",
+        "Re Stock Drinks",
+        "Turn off all lights & music.",
       ]},
-      {type:"textarea",key:"diary",label:"Daily diary - any issues? any changes?",optional:true},
-      {type:"text",key:"name",label:"Sign off (name)",required:true},
-      {type:"signature",key:"signature",label:"Signature",required:true},
+      {type:"textarea",key:"diary",label:"Diary Notes / Any Issues? Any Changes?",optional:true},
+      {type:"text",key:"name",label:"Name (optional)",optional:true},
     ] }
   },
 
@@ -1556,6 +1584,61 @@ if(auth){
 // first paint - always render immediately, regardless of Firebase
 router();
 try{ clearTimeout(window.__ldBoot); }catch(e){}
+
+/* first-open "add to home screen" prompt (shown once per device) */
+function maybeShowInstallPrompt(){
+  try{
+    var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    if(window.navigator.standalone === true) standalone = true;   // iOS Safari
+    // Already installed, or already dismissed once: mark seen and skip.
+    var seen; try{ seen = localStorage.getItem('ld_install_seen'); }catch(e){ seen = '1'; }
+    if(standalone){ try{ localStorage.setItem('ld_install_seen','1'); }catch(e){} return; }
+    if(seen) return;
+
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    var isAndroid = /Android/.test(ua);
+
+    var iosSteps =
+      '<div class="os"><h3>On iPhone or iPad</h3><ol>'+
+      '<li>Tap the <b>Share</b> button <span class="k">&#x2191;</span> at the bottom of Safari.</li>'+
+      '<li>Scroll down and tap <b>Add to Home Screen</b>.</li>'+
+      '<li>Tap <b>Add</b> in the top corner. The Laughing Dog icon appears on your home screen.</li>'+
+      '</ol></div>';
+    var androidSteps =
+      '<div class="os"><h3>On Android</h3><ol>'+
+      '<li>Tap the <b>menu</b> <span class="k">&#x22EE;</span> in the top right of Chrome.</li>'+
+      '<li>Tap <b>Add to Home screen</b> (or <b>Install app</b>).</li>'+
+      '<li>Tap <b>Add</b>. The Laughing Dog icon appears on your home screen.</li>'+
+      '</ol></div>';
+
+    var steps;
+    if(isIOS) steps = iosSteps;
+    else if(isAndroid) steps = androidSteps;
+    else steps = androidSteps + iosSteps;   // desktop / unknown: show both
+
+    var wrap = document.createElement('div');
+    wrap.className = 'ld-inst';
+    wrap.innerHTML =
+      '<div class="ld-inst-card" role="dialog" aria-modal="true">'+
+        '<div class="ld-inst-logo"><img src="'+LOGO+'" alt="Laughing Dog"/></div>'+
+        '<h2>Add the app to your phone</h2>'+
+        '<p class="lead">Save Laughing Dog to your home screen so it opens like a proper app, full screen and one tap away.</p>'+
+        steps+
+        '<button class="done" type="button">Got it</button>'+
+      '</div>';
+    document.body.appendChild(wrap);
+    requestAnimationFrame(function(){ wrap.classList.add('show'); });
+    function close(){
+      try{ localStorage.setItem('ld_install_seen','1'); }catch(e){}
+      wrap.classList.remove('show');
+      setTimeout(function(){ if(wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 240);
+    }
+    wrap.querySelector('button.done').addEventListener('click', close);
+    wrap.addEventListener('click', function(e){ if(e.target===wrap) close(); });
+  }catch(e){}
+}
+setTimeout(maybeShowInstallPrompt, 600);
 </script>
 </body>
 </html>
