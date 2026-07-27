@@ -4,7 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#3D2B1F" />
-<title>Laughing Dog — Staff & Management</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>Laughing Dog - Staff & Management</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@500;600;700;800&family=Montserrat:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -159,6 +162,7 @@
   .alert-banner .ab-row{font-weight:500;font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid #EBD3CD;cursor:pointer}
   .sub-card.alert{border-left:4px solid var(--danger)}
   .sub-card{border:1px solid var(--bark10);border-radius:14px;padding:13px 15px;margin-bottom:10px;background:#fff;cursor:pointer;box-shadow:var(--shadow)}
+  .rec-sum{color:var(--bark70);font-size:13px;margin-top:5px}
   .sub-card .top{display:flex;justify-content:space-between;gap:8px}
   .sub-card .who{font-weight:700;color:var(--bark)}
   .sub-card .when{font-size:12px;color:var(--bark55)}
@@ -222,6 +226,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
+const BUILD = "2026.07.27b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -246,7 +251,10 @@ function header(){
   </header>`;
 }
 function shell(inner){ app.innerHTML = header() + `<div class="content">${inner}</div>` + `<footer class="made">Laughing Dog</footer>`; }
-function backbar(label,to){ return `<div class="backbar"><button class="back" onclick="location.hash='${to}'">‹ ${esc(label)}</button></div>`; }
+function backbar(label,to){ return `<div class="backbar"><button class="back" onclick="window._nav('${to}')">‹ ${esc(label)}</button></div>`; }
+// Navigate to a hash. If we're already on that hash (e.g. a record detail was
+// rendered on top without changing the URL), force a re-render so Back still works.
+window._nav=function(to){ if(location.hash===to){ router(); } else { location.hash=to; } };
 
 /* =========================================================
    FORM DEFINITIONS  (config-driven)
@@ -293,7 +301,7 @@ const FORMS = {
         "Laid out all utensils for service",
         "Checked and did prep list",
       ]},
-      {type:"textarea",key:"notes",label:"Any problems or changes — what did you do?",optional:true},
+      {type:"textarea",key:"notes",label:"Any problems or changes - what did you do?",optional:true},
       {type:"text",key:"name",label:"Name",required:true},
     ],
     Worthing:[
@@ -318,7 +326,7 @@ const FORMS = {
         "Soap and ample blue roll at each handwashing station (replenish if not)",
         "Kitchen: wash all food prep surfaces with hot soapy water and antibac before any duties; discard cloth/sponge after",
       ]},
-      {type:"textarea",key:"notes",label:"Any problems or changes — what did you do?",optional:true},
+      {type:"textarea",key:"notes",label:"Any problems or changes - what did you do?",optional:true},
       {type:"text",key:"name",label:"Name",required:true},
     ] }
   },
@@ -366,7 +374,7 @@ const FORMS = {
         "Saturday: salted glass washer + emptied drip tray under fridge 2",
         "Sunday: descaled main dishwasher",
       ]},
-      {type:"textarea",key:"diary",label:"Daily diary — any issues? any changes?",optional:true},
+      {type:"textarea",key:"diary",label:"Daily diary - any issues? any changes?",optional:true},
       {type:"text",key:"name",label:"Check completed by (name)",required:true},
       {type:"signature",key:"signature",label:"Signature",required:true},
     ],
@@ -398,7 +406,7 @@ const FORMS = {
         "Re-stock drinks",
         "Turn off all lights & music",
       ]},
-      {type:"textarea",key:"diary",label:"Daily diary — any issues? any changes?",optional:true},
+      {type:"textarea",key:"diary",label:"Daily diary - any issues? any changes?",optional:true},
       {type:"text",key:"name",label:"Sign off (name)",required:true},
       {type:"signature",key:"signature",label:"Signature",required:true},
     ] }
@@ -416,7 +424,7 @@ const FORMS = {
 
   deep_cleans: {
     title:"Deep Cleans", type:"deep_cleans",
-    intro:"Log completed deep cleans here — thank you!",
+    intro:"Log completed deep cleans here - thank you!",
     fields:[
       {type:"name",key:"name",label:"Your name",required:true},
       {type:"text",key:"what",label:"What did you deep clean?",required:true},
@@ -464,7 +472,7 @@ const FORMS = {
         options:["Sell but tell them to go straight home","Ask them to wait 10 minutes then check","Refuse immediately and record it in the Refusals Log","Let them buy it if they're not rude"],answer:2,required:true},
       {type:"quiz",key:"q4",label:"When should you record a refusal in the Refusals Log?",
         options:["Only if the customer gets angry","At the end of your shift","Immediately after the refusal","Only if the manager is watching"],answer:2,required:true},
-      {type:"acknowledge",key:"declaration",label:"Final declaration — tick to confirm you understand:",items:[
+      {type:"acknowledge",key:"declaration",label:"Final declaration - tick to confirm you understand:",items:[
         "I am personally liable for any illegal sales of alcohol I make, which can result in a fine up to £5,000 or prosecution",
         "I understand the four Licensing Objectives",
         "I understand and will apply the Challenge 25 policy and accepted forms of ID (Passport, UK Photo Driving Licence, PASS card)",
@@ -478,7 +486,7 @@ const FORMS = {
 
   accident: {
     title:"Accident / Incident Report", type:"accident",
-    intro:"Standard accident/incident report — I built this from a common template. Simon: confirm against your Jotform version and I'll adjust.",
+    intro:"Standard accident/incident report - I built this from a common template. Simon: confirm against your Jotform version and I'll adjust.",
     unverified:true,
     fields:[
       {type:"date",key:"date",label:"Date of incident",required:true},
@@ -661,9 +669,9 @@ async function submitForm(def){
   if(errs.length){ errBox.textContent="Please complete: "+errs.join(", "); window.scrollTo({top:0,behavior:'smooth'}); return; }
   errBox.textContent="";
   const btn=$("#submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
-  if(!fbReady){ btn.disabled=false; btn.textContent="Submit"; errBox.textContent="Can't save yet — no connection to the database. Submitting works once the app is online / deployed."; return; }
+  if(!fbReady){ btn.disabled=false; btn.textContent="Submit"; errBox.textContent="Can't save yet - no connection to the database. Submitting works once the app is online / deployed."; return; }
   let alertUnits=[];
-  if(data.temps){ for(const n in data.temps){ const t=data.temps[n]; if(t && t.ok===false) alertUnits.push(n+" — "+t.c+"°C"); } }
+  if(data.temps){ for(const n in data.temps){ const t=data.temps[n]; if(t && t.ok===false) alertUnits.push(n+" - "+t.c+"°C"); } }
   const payload={
     formType:def.type, formTitle:def.title, store:store.site,
     submittedBy:data.name||"", data:data, createdAt:firebase.firestore.FieldValue.serverTimestamp(),
@@ -677,7 +685,7 @@ async function submitForm(def){
     console.error(err);
     btn.disabled=false; btn.textContent="Submit";
     if((err.code||"").includes("permission")){
-      errBox.innerHTML="Saved locally for now — the Firestore security rules haven't been switched on yet. Once Simon deploys the rules file (2 minutes, in the setup guide) submissions will save live.";
+      errBox.innerHTML="Saved locally for now - the Firestore security rules haven't been switched on yet. Once Simon deploys the rules file (2 minutes, in the setup guide) submissions will save live.";
     } else {
       errBox.textContent="Couldn't submit: "+(err.message||err);
     }
@@ -728,13 +736,18 @@ const HUBS=[
     {label:'Accident / Incident', route:'#/form/accident'},
     {label:'Deep Cleans', route:'#/form/deep_cleans'},
   ]},
-  {key:'orders', title:'Orders', desc:'Supplier order forms', icon:'orders', items:[
-    {label:'Weekly Orders & Bookers', route:'#/doc/order_monday'},
-    {label:'Cheeseman & Adams (Mondays)', route:'#/doc/order_adams'},
-    {label:'TG Fruits', route:'#/doc/order_tg'},
-    {label:'Fresho / Adams Delivery', ext:EXT.fresho},
-    {label:'Asda', route:'#/doc/order_asda'},
-  ]},
+  {key:'orders', title:'Orders', desc:'Supplier order lists', icon:'orders', sites:{
+    Brighton:[
+      {label:'Weekly Orders & Bookers', route:'#/doc/order_monday_brighton'},
+      {label:'Cheeseman & Adams (Mondays)', route:'#/doc/order_adams_brighton'},
+      {label:'TG Fruits', route:'#/doc/order_tg_brighton'},
+      {label:'Fresho / Adams Delivery', ext:EXT.fresho},
+      {label:'Asda', route:'#/doc/order_asda_brighton'},
+    ],
+    Worthing:[
+      {label:'Monday List 2026', route:'#/doc/order_monday_worthing'},
+    ],
+  }},
   {key:'staff', title:'Staff', desc:'Handbook, holidays, training', icon:'staff', items:[
     {label:'Handbook', route:'#/doc/handbook'},
     {label:'Holidays', route:'#/doc/holidays'},
@@ -751,7 +764,7 @@ function rowItem(label,route,ext){
 
 function viewHome(){
   if(!store.site){ return viewSitePicker(); }
-  let h = `<p class="eyebrow">${esc(store.site)} café</p><h1 class="page">Staff Hub</h1><p class="sub">Everything you need for your shift. Tap a section to open it.</p>`;
+  let h = `<p class="eyebrow">${esc(store.site)}</p><h1 class="page">Staff Hub</h1><p class="sub">Everything you need for your shift. Tap a section to open it.</p>`;
   h += `<div class="hub-grid">`;
   HUBS.forEach(hub=>{
     const to = hub.route || ('#/hub/'+hub.key);
@@ -763,15 +776,18 @@ function viewHome(){
   h += `<button class="hub-tile wide" onclick="location.hash='${mto}'">
     ${hubIcon('lock')}<div class="hub-txt"><div class="hub-t">Management</div><div class="hub-d">${mdesc}</div></div></button>`;
   h += `</div>`;
+  h += `<p class="muted" style="text-align:center;font-size:11px;margin-top:22px">Version ${esc(BUILD)}</p>`;
   shell(h);
 }
 
 function viewHub(key){
   const hub=HUBS.find(h=>h.key===key);
-  if(!hub || !hub.items){ return viewHome(); }
+  if(!hub){ return viewHome(); }
+  const items = (hub.sites && hub.sites[store.site]) || hub.items;
+  if(!items){ return viewHome(); }
   let h=backbar("Home","#/");
   h+=`<h1 class="page">${esc(hub.title)}</h1><p class="sub">${esc(hub.desc)} · ${esc(store.site)}</p>`;
-  h+=`<div class="rowlist">${hub.items.map(it=>rowItem(it.label,it.route,it.ext)).join("")}</div>`;
+  h+=`<div class="rowlist">${items.map(it=>rowItem(it.label,it.route,it.ext)).join("")}</div>`;
   shell(h);
 }
 
@@ -859,7 +875,7 @@ function viewAllergens(catId){
   _alCat = catId || null; _alDish=null;
   let h = _alCat ? backbar("All categories","#/allergens") : backbar("Home","#/");
   h+=`<h1 class="page">Allergens</h1><p class="sub">Live from your management panel · ${esc(store.site)}</p>`;
-  h+=`<div class="legend"><span class="chip yes">Contains</span><span class="chip trace">May contain traces</span><span class="chip no">Free from</span></div>`;
+  h+=`<div class="legend"><span class="chip yes">Contains</span><span class="chip trace">May contain traces</span></div>`;
   h+=`<div class="search"><input type="text" id="allergenSearch" placeholder="Search dishes or ingredients…" value="${esc(_alSearch)}"></div>`;
   h+=`<div id="allergenBody"><div class="spinner"></div></div>`;
   shell(h);
@@ -918,14 +934,12 @@ function viewAllergensDish(id){
   if(!it){ shell(backbar("Allergens","#/allergens")+`<p class="muted">Dish not found.</p>`); return; }
   const contains=ALLERGEN_COLS.filter(([k])=>alState(it.allergens?it.allergens[k]:null)==="c").map(([k,l])=>l);
   const traces=ALLERGEN_COLS.filter(([k])=>alState(it.allergens?it.allergens[k]:null)==="t").map(([k,l])=>l);
-  const free=ALLERGEN_COLS.filter(([k])=>alState(it.allergens?it.allergens[k]:null)==="n").map(([k,l])=>l);
   let h=backbar("Back",backTo);
   h+=`<h1 class="page">${esc(it.name||"")}</h1><p class="sub">${esc(it.store==="both"?"Brighton & Worthing":it.store||store.site)}</p>`;
   h+=`<div class="dish-block contains"><div class="dbh">Contains</div>${contains.length?`<div class="chips">${contains.map(l=>`<span class="chip yes">${esc(l)}</span>`).join("")}</div>`:`<p class="muted">Nothing listed</p>`}</div>`;
   if(traces.length) h+=`<div class="dish-block traces"><div class="dbh">May contain traces</div><div class="chips">${traces.map(l=>`<span class="chip trace">${esc(l)}</span>`).join("")}</div></div>`;
-  h+=`<div class="dish-block free"><div class="dbh">Free from</div><div class="chips">${free.map(l=>`<span class="chip no">${esc(l)}</span>`).join("")}</div></div>`;
   if(it.ingredients) h+=`<div class="sec-title" style="font-size:16px">Ingredients</div><div class="ing-txt">${esc(it.ingredients)}</div>`;
-  h+=`<p class="muted" style="font-size:12px;margin-top:14px">Allergen info is live from the kitchen's management panel. If anything is unclear, check with the kitchen.</p>`;
+  h+=`<p class="muted" style="font-size:12px;margin-top:14px">We use all 14 allergens in our kitchen, so cross-contamination is always possible. This shows what a dish contains or may contain traces of. If anything is unclear, check with the kitchen.</p>`;
   shell(h);
 }
 
@@ -948,7 +962,7 @@ async function doLogin(){
   const email=$("#mEmail").value.trim().toLowerCase(); const pass=$("#mPass").value;
   const btn=$("#loginBtn"); const err=$("#loginErr"); err.textContent="";
   if(!email||!pass){ err.textContent="Enter your email and password."; return; }
-  if(!fbReady){ err.textContent="No internet connection — management login needs to be online."; return; }
+  if(!fbReady){ err.textContent="No internet connection - management login needs to be online."; return; }
   btn.disabled=true; btn.textContent="Signing in…";
   try{
     await auth.signInWithEmailAndPassword(email,pass);
@@ -998,7 +1012,7 @@ function renderSubs(){
   let banner="";
   if(alerts.length){
     banner=`<div class="alert-banner">⚠️ ${alerts.length} temperature alert${alerts.length>1?"s":""} need checking`
-      + alerts.slice(0,5).map(s=>`<div class="ab-row" onclick="window._openSub('${s.id}')">${esc(s.store||"")} · ${esc(s.submittedBy||"—")} · ${esc(fmtWhen(s))}${(s.alertUnits&&s.alertUnits.length)?` — ${esc(s.alertUnits.join(", "))}`:""}</div>`).join("")
+      + alerts.slice(0,5).map(s=>`<div class="ab-row" onclick="window._openSub('${s.id}')">${esc(s.store||"")} · ${esc(s.submittedBy||"-")} · ${esc(fmtWhen(s))}${(s.alertUnits&&s.alertUnits.length)?` - ${esc(s.alertUnits.join(", "))}`:""}</div>`).join("")
       + (alerts.length>5?`<div class="ab-row muted">…and ${alerts.length-5} more</div>`:"")
       + `</div>`;
   }
@@ -1007,7 +1021,7 @@ function renderSubs(){
     const alert=subHasAlert(s);
     const flag=alert?`<span class="bad-badge">temp alert</span>`:"";
     return `<div class="sub-card${alert?' alert':''}" onclick="window._openSub('${s.id}')">
-      <div class="top"><span class="who">${esc(s.submittedBy||"—")}${flag}</span><span class="when">${esc(fmtWhen(s))}</span></div>
+      <div class="top"><span class="who">${esc(s.submittedBy||"-")}${flag}</span><span class="when">${esc(fmtWhen(s))}</span></div>
       <div class="type">${esc((FORMS[s.formType]&&FORMS[s.formType].title)||s.formTitle||s.formType)} · ${esc(s.store||"")}</div>
     </div>`;
   }).join("");
@@ -1016,7 +1030,7 @@ window._openSub=function(id){ const s=_subs.find(x=>x.id===id); if(!s)return; re
 function renderSubDetail(s, back){
   let h=backbar("Back", back||"#/manage");
   h+=`<h1 class="page">${esc((FORMS[s.formType]&&FORMS[s.formType].title)||s.formTitle||s.formType)}</h1>`;
-  h+=`<p class="sub">${esc(s.store||"")} · ${esc(fmtWhen(s))} · by ${esc(s.submittedBy||"—")}</p>`;
+  h+=`<p class="sub">${esc(s.store||"")} · ${esc(fmtWhen(s))} · ${s.submittedBy?("by "+esc(s.submittedBy)):"no name recorded"}</p>`;
   const d=s.data||{};
   const rows=[];
   for(const [k,v] of Object.entries(d)){
@@ -1041,25 +1055,48 @@ function prettyKey(k,formType){
 }
 
 /* =========================================================
-   ENVIRONMENTAL HEALTH (records + documents) — open to all staff
+   ENVIRONMENTAL HEALTH (records + documents) - open to all staff
    ========================================================= */
 const REC_TYPES=[
   ["start_of_day","Start of Day records"],["end_of_day","End of Day records"],
   ["four_weekly","4-Weekly Reviews"],["deep_cleans","Completed Deep Cleans"],
   ["accident","Accident / Incident records"],["staff_training","Staff Training records"],
+  ["fat_trap","Fat Trap records"],
 ];
+// Which record types show at each store. Fat Trap is Brighton only.
+function recTypesFor(site){
+  return REC_TYPES.filter(([t])=> t==="fat_trap" ? site==="Brighton" : true);
+}
+// Food-safety documents, per store. Risk assessments & Electrical are Brighton only.
+// ext links open a PDF that sits next to index.html on the host.
+function ehDocsFor(site){
+  if(site==="Worthing") return [
+    {label:"Safer Food Better Business", ext:"sfbb-worthing.pdf"},
+  ];
+  return [
+    {label:"Safer Food Better Business", ext:"sfbb-brighton.pdf"},
+    {label:"Risk Assessments", route:"#/risk"},
+    {label:"Electrical Installation Certificate", ext:"electrical-certificate.pdf"},
+  ];
+}
+// Risk assessments (Brighton). Add more here as they come in.
+const RISK_ASSESSMENTS=[
+  {label:"Fire Risk Assessment 2024", ext:"fire-risk-assessment.pdf"},
+];
+function viewRisk(){
+  let h=backbar("Environmental Health","#/eh");
+  h+=`<h1 class="page">Risk Assessments</h1><p class="sub">${esc(store.site)}</p>`;
+  h+=`<div class="rowlist">${RISK_ASSESSMENTS.map(d=>rowItem(d.label,d.route,d.ext)).join("")}</div>`;
+  shell(h);
+}
 function recTitle(type){ const r=REC_TYPES.find(x=>x[0]===type); return r?r[1]:"Records"; }
 function tsOf(s){ return s.createdAt&&s.createdAt.seconds?s.createdAt.seconds:(Date.parse(s.createdAtLocal||0)/1000||0); }
 
 function viewEH(){
   let h=backbar("Home","#/");
   h+=`<h1 class="page">Environmental Health</h1><p class="sub">Completed records & food-safety documents · ${esc(store.site)}</p>`;
-  h+=`<p class="eyebrow">Completed records</p><div class="rowlist">${REC_TYPES.map(([t,l])=>rowItem(l,"#/records/"+t)).join("")}</div>`;
-  h+=`<p class="eyebrow" style="margin-top:20px">Documents</p><div class="rowlist">
-    ${rowItem("Safer Food Better Business","#/doc/sfbb")}
-    ${rowItem("Fire Assessment 2024","#/doc/fire")}
-    ${rowItem("Electrical Installation Certificate","#/doc/electrical")}
-  </div>`;
+  h+=`<p class="eyebrow">Completed records</p><div class="rowlist">${recTypesFor(store.site).map(([t,l])=>rowItem(l,"#/records/"+t)).join("")}</div>`;
+  h+=`<p class="eyebrow" style="margin-top:20px">Documents</p><div class="rowlist">${ehDocsFor(store.site).map(d=>rowItem(d.label,d.route,d.ext)).join("")}</div>`;
   shell(h);
 }
 
@@ -1079,13 +1116,28 @@ function viewRecords(type){
     renderRecords();
   },err=>{ const b=$("#recBody"); if(b) b.innerHTML=`<p class="err">Couldn't load records: ${esc(err.message)}<br><span class="muted">If this says permission denied, deploy the updated Firestore rules from the setup guide.</span></p>`; });
 }
+function recSummary(s){
+  const d=s.data||{};
+  if(s.formType==="deep_cleans"&&d.deep_cleaned) return "Cleaned: "+d.deep_cleaned;
+  if(s.formType==="four_weekly") return d.observed_problem_or_repeat==="Yes"?"Issue noted in review":"Reviewed, no issues";
+  if(s.formType==="fat_trap") return d.completed||d.notes||"";
+  if(d.temps&&typeof d.temps==="object"){
+    const bad=Object.entries(d.temps).filter(([n,t])=>t&&t.ok===false).map(([n,t])=>`${n} ${t.c}°C`);
+    if(bad.length) return "Out of range: "+bad.join(", ");
+    if(Object.keys(d.temps).length) return "All temps in range";
+  }
+  return d.notes||"";
+}
+function whoLabel(s){ return s.submittedBy?esc(s.submittedBy):`<span class="muted">No name recorded</span>`; }
 function renderRecords(){
   const b=$("#recBody"); if(!b||_recSubs===null) return;
   if(!_recSubs.length){ b.innerHTML=`<p class="muted">No ${esc(recTitle(_recType).toLowerCase())} yet for ${esc(store.site)}. New submissions will appear here.</p>`; return; }
   b.innerHTML=_recSubs.slice(0,300).map(s=>{
     const alert=subHasAlert(s); const flag=alert?`<span class="bad-badge">temp alert</span>`:"";
+    const sum=recSummary(s);
     return `<div class="sub-card${alert?' alert':''}" onclick="window._openRec('${s.id}')">
-      <div class="top"><span class="who">${esc(s.submittedBy||"—")}${flag}</span><span class="when">${esc(fmtWhen(s))}</span></div>
+      <div class="top"><span class="who">${whoLabel(s)}${flag}</span><span class="when">${esc(fmtWhen(s))}</span></div>
+      ${sum?`<div class="rec-sum">${esc(sum)}</div>`:""}
     </div>`;
   }).join("");
 }
@@ -1095,20 +1147,17 @@ window._openRec=function(id){ const s=_recSubs.find(x=>x.id===id); if(s) renderS
    DOC / STUB pages (reference docs + order forms to be added)
    ========================================================= */
 const DOCS={
-  smoothie:{t:"Smoothie List",n:"Smoothie recipes/list — content to be added from your Jotform/Drive."},
-  icecream:{t:"Milkshakes & Ice Cream Maintenance",n:"Maintenance guide — content to be added."},
-  foodprep:{t:"Food Prep",n:"Food prep guide — content to be added."},
-  lengthoflife:{t:"Length of Life",n:"Shelf-life / use-by reference — content to be added."},
-  handbook:{t:"Handbook",n:"Employee handbook — bring in the content or link the PDF."},
-  holidays:{t:"Holidays",n:"Holiday info / request — confirm whether this is a form or a document."},
-  training:{t:"Staff Training",n:"Staff training materials — content to be added."},
-  electrical:{t:"Electrical Installation Certificate",n:"Certificate (valid until 2029) — upload the PDF to bring it in."},
-  sfbb:{t:"Safer Food Better Business",n:"SFBB pack — bring in the document/PDF."},
-  fire:{t:"Fire Assessment 2024",n:"Fire risk assessment — upload the PDF to bring it in."},
-  order_monday:{t:"Weekly Orders & Bookers",n:"The big Monday order list. I've captured the full item structure from Jotform and will port it into a tick/quantity order form next."},
-  order_adams:{t:"Cheeseman & Adams (Mondays)",n:"Adams & Cheeseman order list — to be ported from Jotform."},
-  order_tg:{t:"TG Fruits",n:"TG Fruit order list — to be ported from Jotform."},
-  order_asda:{t:"Asda",n:"Asda order list — to be ported from Jotform."},
+  smoothie:{t:"Smoothie List",n:"Smoothie recipes/list - content to be added from your Jotform/Drive."},
+  icecream:{t:"Milkshakes & Ice Cream Maintenance",n:"Maintenance guide - content to be added."},
+  foodprep:{t:"Food Prep",n:"Food prep guide - content to be added."},
+  lengthoflife:{t:"Length of Life",n:"Shelf-life / use-by reference - content to be added."},
+  handbook:{t:"Handbook",n:"Employee handbook - bring in the content or link the PDF."},
+  holidays:{t:"Holidays",n:"Holiday info / request - confirm whether this is a form or a document."},
+  training:{t:"Staff Training",n:"Staff training materials - content to be added."},
+  electrical:{t:"Electrical Installation Certificate",n:"Certificate (valid until 2029) - upload the PDF to bring it in."},
+  sfbb:{t:"Safer Food Better Business",n:"SFBB pack - bring in the document/PDF."},
+  fire:{t:"Fire Assessment 2024",n:"Fire risk assessment - upload the PDF to bring it in."},
+  order_worthing_todo:{t:"Worthing order lists",n:"The Worthing supplier order lists live in your Worthing (LDW) Jotform app, which needs a login to open, so I couldn't pull them across yet. Send me the item lists (or log into Jotform and open the Worthing app so I can read them) and I'll build them here exactly like the Brighton ones."},
 };
 /* Reference content brought across from Jotform (verbatim). */
 const REFDOCS={
@@ -1131,7 +1180,6 @@ const REFDOCS={
   smoothie:{ title:"Smoothie List", sub:"Smoothie make & prep + specials drink prep", sections:[
     {h:"Smoothie Make List", b:"WAKE UP\nCircular tub + espresso + glass of ice + FULL glass almond milk\n\nBOUNTY HUNTER\nBH tub + glass of ice + FULL glass coconut milk\n\nNAMASTE\nNamaste tub + 2/3 glass coconut milk\n\nTHE GLOW UP\nGlow Up tub (green lid) + LARGE handful of spinach + tub full of almond milk\n\nTHE BERRY BOOST\nBerry Boost tub (red lid) + tub full of water\n\nTHE SUNSET\nSunset tub (orange lid) + tub full of coconut milk. Add raspberry puree around the glass."},
     {h:"Smoothie Prep List", b:"THE GLOW UP\n1/2 a peeled orange\n1/2 banana\n2 tsp cashew butter\n\nTHE BERRY BOOST\n1/2 cup mixed frozen berries\n1/2 a peeled orange\n1/2 banana\n2 tbsp mango puree\n\nTHE SUNSET\n1/2 cup pineapple chunks\n1/2 banana\n2 tbsp mango puree\n\nWAKE UP (tiny circular tub)\n1/3 cup chopped dates\n2 tbsp peanut butter\n1 tsp cacao\n\nTHE BOUNTY HUNTER (small rectangular tub)\n1 chopped banana\nheaped tsp vegan protein powder\n2 heaped tsp cashew butter\n4 tsp cacao\n\nTHE NAMASTE (small rectangular tub)\n2 heaped large spoonfuls frozen mixed summer fruits\n1 chopped banana\n1 tbsp Namaste mix"},
-    {h:"Specials Drink Prep", b:"BROWN SUGAR SYRUP\n2 cups brown sugar\n2 cups water\n1 tsp vanilla extract\n1 tsp cinnamon\nCombine all ingredients in a pot on Ella's stove, turn the hob to 3 until bubbling, then leave on 1 for 30 mins. Let cool, bottle, and label with the date it was made.\n\nEARL GREY CONCENTRATE\n2400ml water\n25 tsp earl grey\nPut the filled teabags in a pot of cold water, heat on a low temp (2 on Ella's stove) until it comes to a slow bubble. Turn off the heat and allow to brew for a further 6 mins. Remove the tea bags, cool, bottle, and label with the date it was made."},
   ]},
   lengthoflife:{ title:"Length of Life", sub:"Shelf life of the kitchen goods we prep & sell", sections:[
     {h:"Sausage Rolls", b:"Sausage rolls - 2 days\nVegan sausage rolls - 3 days"},
@@ -1141,9 +1189,62 @@ const REFDOCS={
     {h:"Prepped Stuff", b:"Hummus - 3 days\nSmashed avo - 3 days\nScrambled tofu - 3 days\nRoasted toms - 3 days\nChia jam - 1 month from defrosting\nPancake mix - 5 days\nMushrooms - 3 days\nCauliflower - 7 days\nRed cabbage - up to 2 weeks\nKale - 7 days"},
     {h:"Dressings", b:"Mint yogurt - use by 2 days\nMaple tahini - 5 days"},
   ]},
-  icecream:{ title:"Milkshakes & Ice Cream", sub:"Milkshake recipes & ice cream machine maintenance", sections:[
+  icecream:{ title:"Milkshakes & Ice Cream", sub:"Milkshake recipes", sections:[
     {h:"Milkshakes", b:"All milkshakes have a rough line of ice cream and are then topped up with milk to just below the line on the milkshake cup. Simon will show.\n\nMANGO\n2 spoonfuls of mango puree (in milk fridge)\n\nCHOCOLATE\n1 spoonful of cacao\n\nCOFFEE\nDouble shot of coffee (like a Wake Up)\n\nCHAI\nOne scoop of chai (like a chai latte)\n\nBISCOFF\nA LARGE amount of squeezy Biscoff. Be generous, or it won't taste biscoffy.\n\nSTRAWBERRY\nA LARGE amount of strawberry squeezings"},
-    {h:"Ice Cream Machine - Deep Clean (every Monday)", b:"Remove the hopper valve.\nOn the machine press OFF then WASH.\nDrain all remaining product.\nPress OFF.\nAdd 4 litres of lukewarm water to the hopper.\nClick WASH again and leave for 3 mins.\nDrain all the dirty water while in WASH mode.\nPress OFF.\nAdd 4 litres of SOAPY lukewarm water.\nPress WASH and leave for 3 mins.\nDrain off the dirty water.\nPress OFF.\nMake the sanitiser solution: 4 litres of water and 50ml of sanitiser, add to the hopper.\nPlace the machine into WASH and wait 3 mins.\nDrain the dirty water.\nPress OFF.\nSpray inside the hopper and clean off any ice cream build-up.\nAdd 4 litres of hot water.\nPlace the machine into WASH mode for 3 mins.\nDrain off the dirty water.\nTurn off the machine FULLY (by the little clicker), then disconnect from the mains.\nTake the handle off.\nTake the front panel off (remove the screws on the front).\nTake the main bit off (remove the O-ring).\nPush the middle circular bit out of the front bit.\nRemove the middle white part where the ice cream gets made.\nPut all removed parts in hot soapy water.\nSpray and clean inside the middle part.\nReassemble the machine.\nLeave a note on the machine for whoever is in Tuesday morning to make up more product and turn the machine on."},
+  ]},
+  order_monday_brighton:{ title:"Weekly Orders & Bookers", sub:"Brighton Monday order list", sections:[
+    {h:"Bookers - Ella's Booker List", b:"Sucranna light brown soft sugar 25kg - HB Ingredients (case 1 £33.12)\nChef William Gluten Free Baking Powder 900g (min 1) - Booker (1 £6.99 / 6 £37.99)\nChef William Bicarbonate of Soda 1kg (min 1) - Booker (1 £4.49 / 6 £24.49)\nMatthews Cotswold Flour Rollright Self Raising 16kg (1) - Booker (£10.99)\nCurtis Catering Walnut Pieces 1kg (1) - Booker (1 £11.49 / 6 £66.69)\nFlora Buttery 2kg (min 2) - Booker (1 £7.99 / 6 £46.35)\nFontinella Chick Peas in Salted Water 2.5kg (min 4) - Booker (1 £3.49 / 6 £18.99)\nKTC Sweetened Kesar Mango Pulp 850g (min 6) - Booker (case 6 £21.49)\nPineapple Chunks (min 6) - Booker (case 6 £21.49)\nJus-Rol Puff Pastry Block 1.5kg (min 3) - Booker (£1.75)\nHikari Medium Sweet White Miso Paste 400g (check with Ella) - Amazon (£5.10)\nKikkoman Tamari Gluten Free Soy Sauce 1L (min 1/2) - Amazon (£5.92 inc VAT)\nGochugaru Flakes (min 1/2) - Amazon ('Buy Again')\nPorridge Oats 5kg - Booker\nGolden Syrup (min 1) - Booker\nFreeze dried raspberries (check with Ella) - Booker or Amazon\nIcing Sugar 10kg (ask Ella) - Booker"},
+    {h:"Ella's Chocolate (HB / Nuts in Bulk)", b:"Tahini (1/2 x big backup tub, check with Ella) - Nuts in Bulk\nWhite Chocolate (1 backup) - HB\nDark Chocolate (1 backup) - HB\nCallebaut Alkalised 'Extra Brute' deep dark red cocoa powder (22-24% fat) 5kg (min 1) - HB or Amazon"},
+    {h:"Cafe Kitchen - Booker List", b:"Premium Chutney (6) - Booker or Adams (Fig Chutney 3kg)\nMacphie Salted Caramel Pot 1L (3) - Booker\nNutella 3kg (1) - Booker\nVegan Nutella 350g (2) - ask Simon, buy at Sainsbury's\nVermont Pure Canadian Maple Syrup 1L (12) - Booker (1 £13.99 / 6 £72.49)\nChef's Larder Poppy Seeds 600g (1) - Booker\nChef's Larder Glaze with Balsamic Vinegar of Modena 500ml (min 3) - Booker\nChef's Larder Extra Virgin Olive Oil 5L (2) - Booker\nWhite Wine Vinegar 1L (6) - Booker\nApple Cider Vinegar 1L (1) - Booker\nBalsamic Vinegar 500ml (1) - Booker\nHeinz Big Beans 12 x 2.62kg - Booker (case 6 £27.49)\nCraigellachie Smoked Atlantic Salmon 1kg (4) - Booker (£19.99)"},
+    {h:"Seeds & Spices - BuyWholeFoods.com", b:"Turmeric 1kg (£7.33)\nGinger Ground 500g (£6.10)\nWhole Black Peppercorns 250g (min 1) (£4.81)\nGround Coriander 500g (£4.13)\nCumin Ground 500g (£7.51)\nOregano 500g (£7.45)\nRosemary 500g (£4.24)\nThyme 500g (£5.75)\nNutmeg Ground 250g (£6.34)\nChilli Powder 250g (min 1) (£4.28)\nSmoked Paprika 500g (1) (£5.88)\nCinnamon Ground 500g gluten free (£5.78)\nNutritional Yeast 1kg (£23.04)\nBeetroot Powder 500g (£6.22)\nBrown Linseeds 2kg (£6.05)\nOrganic Chia Seeds 3kg (£24.49)\nOrganic Pumpkin Seeds 3kg (£33.67)\nOrganic Sunflower Seeds 3kg (£12.98)\nOrganic Hemp Protein Powder (50%) 1kg (£13.08)\nFlaked Almonds 1kg (£11.92)\nGround Almonds 2.5kg (£30.62)"},
+    {h:"General Booker List", b:"CleanPro+ Oven & Grill Cleaner 1L (min 9) - case size 6\nSea Salt 1.1kg (1) - £2.69\nChef's Larder Lemon Juice 1L (2) - (1 £3.29 / 6 £18.99)\nLichfield Salted Butter Portions 100s (2) - (1 £3.29 / 6 £18.99)\nHeinz Tomato Ketchup bottles (1 pack) - Booker\nHP Brown Sauce bottles (1 pack) - Booker\nEnglish Mustard (1 big bottle) - Booker\nFlying Goose Sriracha 455ml (min 4 bottles) - Booker (6 £15.99 / 1 £2.69)\nChef's Larder Vegan Mayo 1L (6, min 2) - Booker (case 6 £14.99)\nTyrrells Lightly Sea Salted Crisps 40g - Booker (case £12.79)\nTyrrells Sea Salt & Cider Vinegar Crisps 40g - Booker (case £12.79)\nTyrrells Mature Cheddar & Chive Crisps 40g - Booker (case £12.79)\nTyrrells Sweet Chilli & Red Pepper Crisps 40g (1/2 backup box) - Booker (case £12.79)\nSmooth Peanut Butter 1kg (3 x 1kg tubs) - Booker (3 £9.99 / 1 £3.99)\nZuma Hot Chocolate (min 2 x 1kg bags) - A1 (8 £72.99 / 1 £9.39)\nZuma Chai Powder (2 x 1kg tins) - A1 (£13.99)\nCadbury Chocolate Powder for duster 5kg (min 1/2 tub) - Booker (£36.99)\nChef's Larder Frozen Summer Fruits 1kg (4 backup) - Booker (£7.99)\nWinalot Shapes Dog Biscuits 800g (min 2 boxes) - Booker (case 5 £12.11)\n25kg granulated sugar (1/2 sack backup) - Booker (£16.49)\nPuly Caff Verde Cleaning Powder 1kg (2 backup) - A1 £9.59 or Amazon £8.20\nBaking Parchment Paper 440mm x 50m (2) - Booker (single £11.89 / case 9 £85.19)"},
+    {h:"Amazon Only", b:"Wrapmaster 3000 (1 backup box)\nTiptree Fine Cut Orange Marmalade Portions 72 x 28g (min 1) (£27.99)\nMatcha Powder 200g (1 backup) (case 4 £65.96 / 1 £16.49)\nZeina Cashew Butter 1kg (2 full x 1kg tubs) (£14.95)"},
+    {h:"Syrups (A1, occasionally Amazon)", b:"Sweetbird Caramel Syrup (min 2) - A1 (£7.69)\nSweetbird Sugar Free Vanilla Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Vanilla Syrup 1L (min 2) - A1 (£7.69)\nSweetbird Hazelnut Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Pumpkin Spice Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Peach Iced Tea Syrup 1L (min 2) - A1 (£7.69)\nSweetbird Watermelon Iced Green Tea Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Passion Fruit Lemon Iced Tea Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Raspberry Iced Tea Syrup 1L (min 1) - A1 (£7.69)\nStrawberry Monin Puree (min 2) - Booker (case 4 £56.03) / Amazon £14.50 / A1\nMango Monin Puree (min 1) - Amazon (£18.79) or A1\nMonin Raspberry Puree (min 2) - Amazon (£17.50) or A1"},
+    {h:"Drinks Shelf - Alcohol & Mushroom", b:"Camden Hells Lager Beer (24 cans)\nHepworth Sussex Traditional Pale Ale (24 bottles)\n\nJaga Mushroom Drinks (1 box backup each):\nWatermelon\nMixed Berry\nMexican Lime and Mint\nPomelo and Passionfruit"},
+    {h:"Drinks - Glass Bottled (Booker)", b:"Highland Spring Water - Still (1 backup)\nHighland Spring Water - Sparkling (1 backup)\nClassic Coca Cola glass bottle 330ml (2 x case of 24)\nDiet Coca Cola glass bottle 330ml (2 x case of 24)"},
+    {h:"Drinks - Ringden Farm (01580 879385)", b:"Apple Juice - 2 crates at all times\nOrange Juice - 2 crates at all times\nApple & Mango Juice (1 backup crate)\nSparkling Orange & Apple cans (1 backup crate)\nSparkling Apple can (1 backup crate)\nSparkling Apple & Elderflower can (1 backup crate)\nMango & Apple sparkling (1 backup)\nRaspberry & Apple sparkling (1 backup)"},
+    {h:"Drinks - Karma Drinks (from Suma)", b:"Counter Culture Mango, Ginger & Lime Kombucha (2 boxes)\nCounter Culture Citrus Yuzu / Try Dry Kombucha (2 boxes)\nCounter Culture Raspberry Elderflower Kombucha (2 boxes)\nKarma Summer Orangeade 24 x 330ml (2 boxes)\nKarma Gingerella Ginger Ale 24 x 330ml (2 boxes)\nKarma Razza Raspberry Lemonade 24 x 330ml (2 boxes)\nKarma Lemony Lemon 24 x 330ml (2 boxes)"},
+    {h:"Juices & Dairy-Free Milks (Booker)", b:"Grapefruit Ting (1)\nCawston Press Apple & Mango 18 x 200ml (2) - £8.49\nCawston Press Apple & Pear 18 x 200ml (2) - £8.49\nOatly Oat Drink Barista Edition 6 x 1L (8) - £8.69\nAlpro Barista Almond Long Life 12 x 1L (1) - £17.35\nAlpro Barista Soya Long Life 12 x 1L (4) - £17.35\nAlpro Barista Coconut Long Life 12 x 1L (2) - £15.85"},
+    {h:"Takeaway (Bookers T/A)", b:"Ecopac 250 Assorted Colour Straight Paper Straw (2) - (1 £2.49 / 20 £46.99)\nEcopac 80 Assorted Colour Straight SMOOTHIE Paper Straw (3) - (1 £2.49 / 20 £46.99)\nCompost Me Brown Recycled Napkins 500pk (10) - (1 £5.99 / 10 £46.99)\nDemerara Sugar (1 bag)\nWhite Sugar Sachets (1 box of 1000)\nBrown Sugar Sachets (1 box of 1000)\nSweet & Low Sweetener (1 box of 1000)\nWooden Stirrers (1 backup pack)\nWooden Knives (1 pack)\nWooden Forks (1 pack)\nBrown Paper Bags with handle (2 x 1k)\nLarge Square Paper Bags (1 backup pack)\nMustard Sachets (1 box)\nMayo Sachets (1 box)\nKetchup Sachets (1 box)\nBrown Sauce Sachets (1 box)"},
+    {h:"Cleaning (Bookers)", b:"Clear Vinyl Gloves (2 packs)\nClear Bin Sacks (2 backup)\nBlue Roll (x5)\nYellow Cloth (x3)\nBlue Cloth (x3)\nFloor Gel (2 backup)\nThick Bleach (2 backup)\nWashing Up Liquid (1 box)\nScale Remover (6 bottles)\nJantex Grill Blocks (6)\nGlass Cleaner Concentrate (1 backup)\nAntibac Concentrate (1 backup)\nAutomatic Rinse Aid 10L (1 backup)\nDishwasher Detergent 10L (at least 1 backup)\nMain Dishwasher Salt Granules (4 boxes)\nGlass Dishwasher Salt Granules (3 small bags)\nSponge Scourers (1 pack of 10)\nMetal Scourers (1 pack of 10)\nMop Heads (2 heads)\nHand Soap (5L)\nToilet Roll"},
+    {h:"Teas", b:"Tea Sacks (1 box)\nEnglish Breakfast 'Great British Cuppa' (4) - 1kg £25.20\nEarl Grey Creme (2) - 1kg £39.16\nGreen 'Sunny Sencha' (1) - 1kg £35.96\nPeppermint 'Peppy Mint' (1) - 1kg £39.60\nJasmine, Orange & Spearmint 'Nearly Nirvana' (1) - 1kg £120.08\nChamomile & Apple 'Deckchair Dreaming' (1) - 1kg £56.76\nLemon & Ginger (1) - 1kg £46.08"},
+    {h:"Boho Gelato", b:"Vanilla (1) - 1kg £46.08\nCookies and Cream (1) - 1kg £46.08\n*Special Flavour* (1) - 1kg £46.08\nVG Sea Salt Peanut Butter & Caramel (1) - 1kg £46.08\nVG Chocolate & Cherry (1) - 1kg £46.08\nVG Raspberry & Elderflower Sorbet (1) - 1kg £46.08"},
+    {h:"Drinks Sauces etc. (Booker)", b:"Mini Marshmallows (1 pack)\nOreo Crumbs (1 box backup)\nBiscoff Crumbs (1 box backup)\nBiscoff (full lads) (1 box)\nBiscoff Sauce (4 backup)\nChocolate Sauce (4 backup)"},
+    {h:"Take Away Misc (DecentPackaging / Booker)", b:"Smoothie Cups (1 backup box) - Decent\nSmoothie Lids (1 backup box) - Decent\nTA Sleeves (small) - Decent or Booker\nTA Sleeves (large) - Decent or Booker\n6oz Cups (2 backup) - Decent\n8oz Cups (2 backup) - Decent\n8oz Lids (2 backup) - Decent\n12oz Cups (2 backup) - Decent\n12oz Lids (2 backup) - Decent\nFood Boxes (2 backup) - Booker\nEspresso Cups (if low) - Decent\n2-Cup Holder (1 backup box) - Decent or Booker\n4-Cup Holder (1 backup box) - Decent or Booker"},
+  ]},
+  order_adams_brighton:{ title:"Cheeseman & Adams", sub:"Brighton Monday order · standing quantities", sections:[
+    {h:"Cheeseman", b:"Minimum order £40. Email enquiries: enquiries@thecheeseman.co.uk\n\nCheddar Cheese - 1 bag\nFeta 200g - 4\nCream Cheese - 1\nForesters Smoked Cheese 2kg wheel - 2\nApplewood Smoked VG Slices - 4\nSalted Butter - 1\nUnsalted Butter - 1"},
+    {h:"Adams", b:"Dates 2kg - 2\nRice Vinegar bottle - 2\nQuinoa (kg) - 2\nDijon Mustard tub - 1\nBaking Powder big tub - 3\nCorn Flour - 2\nLemons - 9kg\nCarrot (kg) - 2\nDill - 1\nCapers - 1\nTofu (small) - 4 (10 for the weekend)\nAerosol Cream - 2\nSliced Halloumi - 2\nFrozen All-Butter Croissants - 1\nDesiccated Coconut (kg) - 3\nSunflower Oil - 3\nBalsamic Vinegar 5L - 1\nApple Sauce - 2\nVanilla Essence - 2\nChilli Flakes - 2\nGarlic Powder - 1\nOnion Powder - 1\nCaster Sugar 25kg - 1\nPlain Flour 16kg x3 - 1\nDove's Farm GF Flour - 1"},
+  ]},
+  order_tg_brighton:{ title:"TG Fruits", sub:"Brighton fruit & veg order · standing quantities", sections:[
+    {h:"How to order", b:"Email order to orders@tgfruits.com, or call 01273 503390 and leave a message. Always state the type of unit you want, e.g. 2 HEADS of cos lettuce, 4 SINGLE Granny Smith apples, and so on."},
+    {h:"Order List", b:"Eggs Trays (Large Free Range) - 6 trays (keep 1 backup box at all times; 2 boxes for the weekend)\nBanana box - 1\nRocket - 3 bags\nOranges - 1 box\nBlueberries - 2 punnets\nRaspberries - 2 punnets\nCos Lettuce - 4 heads\nBaby Spinach - 5 bags\nWhole Milks - 24 single\nSkinny Milks - 4 single\nBaby Watercress - 5 punnets\nCurly Parsley - 2 bunches\nCoriander - 2 bunches\nSpring Onion - 1 bunch\nRed Onions - 2 kg\nWhite Onions - 2 single\nMedium Aubergine - 2 single\nRed Peppers - 2 single\nYellow Peppers - 2 single\nCourgette - 2 single\nPeeled Garlic in tub - 1 kg\nFresh Ginger - 1 kg\nLimes - 3 kg\nButton Mushrooms - 2 boxes\nAvocado box - 3 boxes\nSalad Tomatoes - 2 boxes\nRegular Cherry Tomatoes - 1 box (2 for the weekend)"},
+  ]},
+  order_asda_brighton:{ title:"Asda", sub:"Brighton Click & Collect", sections:[
+    {h:"How to order", b:"Click & Collect. Pay out cash from the till, pay in the change, and leave the receipt in the till."},
+    {h:"Food", b:"Blueberries (small punnet)\nVG Feta\nFeta\nKale\nBlack Beans\nAlpro Plain Yogurt (2)\nEnglish Breakfast tea bags\nDecaf tea\nCadbury Chocolate\nCaramel Sauce (Coronation)\n'Free From' Baking Powder\nVG Whipped Cream\nWhipped Cream Aerosol\nOranges\nTable Salt\nGround Black Pepper\nGarlic Granules\nIcing Sugar\nGluten Free Bread\nCauliflower\nSpinach\nRomaine Lettuce\nSweet Potatoes\nStrawberries\nSumac Powder\nPomegranate Seeds"},
+    {h:"Not Food / Misc", b:"Kitchen Roll\nHand Soaps\nAir Freshener\nParacetamol\nSanitary Products\nCello Tape\nGlass Dishwasher Salt\nSharpies\nMr Sheen\nPink Stuff"},
+  ]},
+  holidays:{ title:"Holidays", sub:"How to request holiday, and the policy", sections:[
+    {h:"Before You Request", b:"Holiday is requested through BrightPay and your shifts are managed in Square. Holiday must always be requested and approved in advance.\n\nBefore you submit a request, check:\n- You have enough holiday hours available in BrightPay\n- Your requested time off does not exceed your normal working hours\n- The dates do not clash with key business needs or peak periods"},
+    {h:"Step 1: Check your balance in BrightPay", b:"1. Open the BrightPay Employee app\n2. Log in using your registered email address\n3. Go to Holiday / Time Off\n4. Check your available holiday balance and any holiday already booked\n\nIf you are unsure about your balance, speak to a manager before requesting time off."},
+    {h:"Step 2: Request holiday in BrightPay", b:"1. In the BrightPay Employee app, go to Holiday / Time Off\n2. Select Request Holiday\n3. Enter your start date and end date, and the number of hours requested (not days)\n4. Add any notes if required\n5. Submit your request\n\nYou will get a notification once your request is approved or declined. Your request may be edited if the hours requested go over your normal contracted hours.\n\nImportant: holiday pay is not confirmed until it has been approved in BrightPay."},
+    {h:"Step 3: Check your shifts in Square", b:"1. Open the Square Team app\n2. Check your upcoming shifts on the rota\n3. Do not assume shifts will be removed automatically\n\nOnce your holiday is approved, management will update the rota in Square. You should double-check that your shifts have been removed. If a shift still appears after approval, notify a manager as soon as possible."},
+    {h:"Holiday rules to remember", b:"- You may not take more than 8 holiday hours per day\n- You may not take more holiday hours in a week than your normal contracted weekly hours\n- Holiday requests may be declined due to staffing or business needs\n- Holiday taken without approval may be unpaid and treated as unauthorised absence"},
+    {h:"Last-minute or emergency holiday", b:"If you need time off urgently:\n- Contact a manager directly as soon as possible\n- Do not rely solely on the app for emergency requests\n- Approval is still required"},
+    {h:"Policy: entitlement & accrual", b:"All workers are entitled to a statutory minimum of 5.6 weeks' paid holiday per holiday year.\n\n- Employees can accrue up to 224 holiday hours per year (the statutory minimum for a full-time employee working 40 hours per week).\n- Holiday accrues at a rate of 12.07% of hours worked.\n- Entitlement accrues proportionally throughout the holiday year.\n- Employees are expected to take their holiday within the relevant holiday year."},
+    {h:"Policy: carry-over & leaving", b:"- Employees may carry over up to 80 unused holiday hours into the following holiday year (contractual holiday only, at the company's discretion).\n- The maximum possible balance in a year is 304 hours (224 current-year plus up to 80 carried over).\n- Statutory holiday should normally be taken within the holiday year unless carry-over is required by law (for example due to sickness or maternity leave).\n\nLeaving mid-year: entitlement is calculated pro-rata. Carried-over holiday is earned proportionally across the year. For example, if employment ends in March (3 months in), the employee is entitled to 20 hours of the carried-over holiday (80 divided by 12, times 3). Any holiday taken in excess of entitlement may be deducted from final pay where permitted by law and contract."},
+  ]},
+  order_monday_worthing:{ title:"Monday List 2026", sub:"Worthing Monday order · standing backups", sections:[
+    {h:"Bookers - Food, Baking & Sauces", b:"Craigellachie Smoked Atlantic Salmon 1kg - Booker (£19.99)\nChef's Larder UHT Real Dairy Cream 500g (1 backup) - Booker (1 £3.59 / 6 £9.49)\nBlaze 100% Smooth Peanut Butter 1kg (2 backup) - Booker (case 3 £9.99)\nChef's Larder English Mustard 2.27L (1/2 bottle backup) - Booker (1 £10.49 / 2 £18.69)\nHaribo Chamallows Mini Marshmallows 1kg (1 backup) - Booker (£6.35)\nWhite Wine Vinegar 5L (1 backup) - Booker (£3.79)\nExtra Virgin Olive Oil 5L (1 backup) - Booker or Adams (£35.99)\nBalsamic Vinegar of Modena 2L (1 backup) - Booker (£9.99)\nGlaze with Balsamic Vinegar of Modena 500ml (3 backup) - Booker (£4.49)\nVegan Mayo 1L (3 backup) - Booker (1 £2.99 / 6 £14.99)\nVegetable Oil 1L 6-pack (1 backup) - Booker (case 6 £9.99)\nBiscoff Topping 1kg (2 backup) - Booker (case 6 £64.59)\nBiscoff Biscuit Crumbs 750g (1 backup) - Booker (1 £4.69 / 6 £32.99)\nLotus Biscoff Biscuits 300pk (1/4 box backup) - Booker (£19.29)\nPreema Vanilla Essence 500ml (1/2 bottle backup) - Amazon (£6.25)\nSilver Spoon Granulated Sugar 25kg (1/2 bag backup) - Booker (£16.49)\nBillington's Demerara Sugar 3kg (1 backup) - Booker (case 4 £28.96)\nNoel's Chocolate Topping Sauce 1kg (2 backup) - Booker (case 6 £24.99)\nVermont Pure Canadian Maple Syrup 1L (6 backup) - Booker (case 6 £72.49)\nNutella 3kg tub (1 backup) - Booker (case 2 £41.99)\nChef's Menu Crushed Chillies 350g (1 backup) - Booker (case 6 £28.49)\nJack's Table Salt 750g for kitchen (1 backup) - Booker (case 6 £4.39)\nTiptree Fine Cut Orange Marmalade Pots 72x28g (1 backup) - Amazon (£27.17)\nMarmite 4 x 24 x 8g portions (1 backup) - Booker (£7.69)\nLemon Juice 1L (1 backup) - Adams (£2.62)\nChopped Dates 2.5kg (2 backup) - BuyWholeFoods (£9.82) or Booker 2kg (£8.49)"},
+    {h:"Bookers - Drinks", b:"Oatly (10 backup) - Booker or Adams (case 6 £9.49)\nAlpro Barista Almond 1L (2 backup) - Booker (case 12 £18.89)\nAlpro Barista Coconut 1L (3 backup) - Booker (case 12 £18.89)\nAlpro Barista Soya 1L (4 backup) - Booker (case 12 £19.25)\nCoke (1 backup)\nDiet Coke (1 backup)\nSan Pellegrino Lemon (1 backup)\nSparkling Water (1 backup)\nStill Water (1 backup)\nCawston Press (4 backup)"},
+    {h:"Bookers - Ketchup, Sauces & Crisps", b:"Heinz Tomato Ketchup 300ml multipack (1 backup) - Booker (case 10 £19.09)\nHeinz Tomato Ketchup 4L refill (1 backup) - Booker (case 2 £35.49)\nHP Original Brown Sauce 450g (2 backup) - Booker (case 12 £30.15)\nHP Brown Sauce 4L refill (1 backup) - Booker (case 2 £30.49)\nKettle Chips Salt & Vinegar (1 backup)\nKettle Chips Salted (1 backup)\nKettle Chips Cheese & Onion (1 backup)\nDog Biscuits multipack (1 backup)\nDog Ice Cream (1 box backup) - Acorn Foods\nCandied Hazelnuts (1 backup) - realfoodsource.co.uk"},
+    {h:"Bookers - Packaging & Takeaway", b:"Aurelia Medium Delight toilet roll (2 backup) - Booker (case 10 £35.99)\nCaterPro Aluminium Foil 60m x 300mm (1 backup) - Booker (£5.39)\nBaking Parchment (1 backup) - Nisbets (5 for free delivery, £8.15 each)\nBioPak Natural Paper Napkins (8 backup) - Booker (case 10 £56.39)\nCaterPro 200 Paper Smoothie Straws Green Stripe (2 boxes) - Booker (case 20 £98.39)\nStraws (1 backup, 2 for summer)\nLarge Takeaway Boxes (1 backup)\nSmall Cake Takeaway Boxes (1 backup)\nSmall Takeaway Cake Bags (1 backup)"},
+    {h:"Bookers - Cleaning & Sundries", b:"CleanPro 10 Zinc Coated Scourers Medium (1 backup) - Booker (1 £5.99 / 18 £88.79)\nCleanPro 5 Sponge Scourers (3 backup) - Booker (case 24 £51.59, cut sponges in half)\nCleanPro 50 All Purpose Cloths Yellow 60x30cm (3 backup) - Booker (case 15 £76.79, cut yellow cloths in half)\nCleanPro 200 Large Refuse Sacks Clear (1 backup) - Booker (£23.99)\nClear Bin Liners (1 backup)\nWashing Up Liquid (2 backup)\nDishwasher Salt (1 backup)\nBlue Roll (3 backup)\nToilet Roll (2 backup)\nHand Soap (1 backup)\nFloor Gel (1 backup)\nBleach (2 backup)\nGlass Cleaner Spray Bottle (1 backup)\nAntibac Spray Bottle (2 backup)\nDishwasher Detergent (1 backup, rarely need)\nDishwasher Rinse Aid (1 backup, rarely need)\nMop Heads (2 backup)"},
+    {h:"BuyWholeFoods Online", b:"Cinnamon Ground 500g gluten free (1 backup) - £5.84\nSmoked Paprika 500g (1 backup) - £5.88\nTurmeric 1kg (1 backup) - £7.33\nThyme (1 backup)\nOregano (1 backup)\nBlack Peppercorns 250g (min 1, 1 backup) - £4.95\nCoarse Ground Black Pepper 500g - £8.55\nNatural Sea Salt (coarse) 1kg (2 backup) - £1.88\nChia Seeds (2 backup)"},
+    {h:"Amazon", b:"Flax Seed (1 backup)\nCacao Powder (1 backup)\nProtein Powder (1 backup)\nCashew Butter (1 backup)\nCafiza (1 backup)\nGrill Block, pack of 4 (1 backup)\nNutritional Yeast (1 backup)\nPost-it Notes (1 backup)\nSellotape (1 backup)\nKids Chalk (1 backup)"},
+    {h:"A1 Coffee", b:"Caramel Syrup (2 backup)\nVanilla Syrup (2 backup)\nHazelnut Syrup (1 backup)\nPeach Iced Tea Syrup (2 backup)\nRaspberry Iced Tea Syrup (1 backup)\nWatermelon Iced Tea Syrup (1 backup)\nPassionfruit Iced Tea Syrup (1 backup)\nZuma Matcha Powder (1 backup)\nZuma Hot Chocolate bag (6 backup)\nZuma Chai Powder (2 backup)\nCheck crazy matcha syrups (rarely need)"},
+    {h:"Bird & Blend Teas", b:"Great British Cuppa (2 backup)\nEarl Grey Creme (1 backup)\nSunny Sencha Green (1 backup)\nPeppymint (1 backup)\nNearly Nirvana (1 backup)\nDeckchair Dreaming (1 backup)\nBreakfast's Ready Honey (1 backup)\nMorning Kick (1 backup)"},
   ]},
 };
 window._toggleSec=function(el){ el.closest(".acc-item").classList.toggle("open"); };
@@ -1160,7 +1261,7 @@ function viewDoc(key){
   const d=DOCS[key]||{t:"Coming soon",n:"This section is being built."};
   shell(backbar("Home","#/")+`<h1 class="page">${esc(d.t)}</h1>
     <div class="note-box">${esc(d.n)}</div>
-    <p class="muted" style="font-size:14px">This button exists in your current app. I've wired it up in the new app — the content just needs bringing across, which we'll do once Simon confirms where it lives.</p>`);
+    <p class="muted" style="font-size:14px">This button exists in your current app. I've wired it up in the new app - the content just needs bringing across, which we'll do once Simon confirms where it lives.</p>`);
 }
 function viewStub(x){ shell(backbar("Home","#/")+`<h1 class="page">Coming soon</h1><div class="note-box">"${esc(x)}" is being built.</div>`); }
 
@@ -1179,6 +1280,7 @@ function router(){
   if(root==="settings") return viewSettings();
   if(root==="hub") return viewHub(parts[1]);
   if(root==="eh") return viewEH();
+  if(root==="risk") return viewRisk();
   if(root==="records") return viewRecords(parts[1]);
   if(root==="allergens"){
     if(parts[1]==="dish") return viewAllergensDish(parts[2]);
@@ -1204,7 +1306,7 @@ if(auth){
     }
   });
 }
-// first paint — always render immediately, regardless of Firebase
+// first paint - always render immediately, regardless of Firebase
 router();
 try{ clearTimeout(window.__ldBoot); }catch(e){}
 </script>
