@@ -231,7 +231,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27d";
+const BUILD = "2026.07.27f";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1300,6 +1300,8 @@ function viewRefDoc(doc){
 }
 /* ORDER FORMS: fillable supplier orders that email the store inbox + save for management */
 const STORE_EMAIL = { Brighton:"brighton@ldbrighton.com", Worthing:"worthing@ldbrighton.com" };
+// Orders email silently from your own Firebase: the app queues a message in the
+// "mail" collection, and Firebase's Trigger Email extension sends it to the store inbox.
 function isOrderNote(h, line){
   if(/^how to order/i.test(h)) return true;
   return /^(minimum order|email |click & collect|pay out|orders@|email order)/i.test(line) || line.includes("@");
@@ -1318,7 +1320,7 @@ function viewOrder(key){
   const email=STORE_EMAIL[store.site]||"";
   let h=backbar("Orders","#/hub/orders");
   h+=`<h1 class="page">${esc(doc.title)}</h1><p class="sub">${esc(doc.sub||"")} · ${esc(store.site)}</p>`;
-  h+=`<div class="note-box">Put the number you need next to each item, then Submit. This opens an email of the order to ${esc(email)} for you to send, and saves it for management.</div>`;
+  h+=`<div class="note-box">Put the number you need next to each item, then Submit. The order emails straight to ${esc(email)} and is saved for management.</div>`;
   orderSections(doc).forEach(sec=>{
     h+=`<div class="ord-h">${esc(sec.h)}</div>`;
     sec.notes.forEach(n=> h+=`<div class="ord-note">${esc(n)}</div>`);
@@ -1350,12 +1352,24 @@ window._submitOrder=async function(key){
     }); }catch(e){ console.error(e); }
   }
   const subject=store.site+" order - "+doc.title;
-  const body=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"+items.join("\n")+"\n";
-  window.location.href="mailto:"+email+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  const btn=$("#ordSubmit"); if(btn){ btn.disabled=true; btn.textContent="Sending…"; }
+  const textBody=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"+items.join("\n")+"\n";
+  const htmlBody="<h2>"+esc(store.site)+" order</h2><p><b>"+esc(doc.title)+"</b><br>Placed by: "+esc(name||"(not given)")+"<br>"+esc(when)+"</p><ul>"+items.map(i=>"<li>"+esc(i)+"</li>").join("")+"</ul>";
+  // queue the order email in Firebase (Trigger Email extension sends it to the store inbox)
+  let emailed=false;
+  if(fbReady){
+    try{
+      await db.collection("mail").add({ to:email, message:{ subject:subject, text:textBody, html:htmlBody } });
+      emailed=true;
+    }catch(e){ console.error(e); }
+  }
+  const msg = emailed
+    ? `${items.length} item${items.length>1?"s":""} for ${esc(store.site)} sent to ${esc(email)} and saved for management.`
+    : `${items.length} item${items.length>1?"s":""} for ${esc(store.site)} saved for management (email could not be queued right now).`;
   shell(`<div class="center success">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#E9EEE3"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#4E6140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div class="big">Order ready</div>
-    <p class="sub">${items.length} item${items.length>1?"s":""} for ${esc(store.site)}. Your email app should open with the order to ${esc(email)}, just press send. It is also saved for management.</p>
+    <div class="big">Order sent</div>
+    <p class="sub">${msg}</p>
     <button class="pill" onclick="location.hash='#/hub/orders'">Back to Orders</button></div>`);
 };
 function viewDoc(key){
