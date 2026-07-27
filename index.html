@@ -163,6 +163,11 @@
   .sub-card.alert{border-left:4px solid var(--danger)}
   .sub-card{border:1px solid var(--bark10);border-radius:14px;padding:13px 15px;margin-bottom:10px;background:#fff;cursor:pointer;box-shadow:var(--shadow)}
   .rec-sum{color:var(--bark70);font-size:13px;margin-top:5px}
+  .ord-h{font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:13px;color:var(--bark);margin:16px 0 8px}
+  .ord-note{font-size:13px;color:var(--bark70);margin:0 0 8px;background:var(--blush);border-radius:10px;padding:8px 11px}
+  .ord-row{display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--bark10);border-radius:10px;background:#fff;margin-bottom:6px}
+  .ord-name{flex:1;font-size:14px;color:var(--bark);line-height:1.3}
+  .ord-qty{width:62px;flex:0 0 auto;text-align:center;padding:9px 6px;font-size:16px}
   .sub-card .top{display:flex;justify-content:space-between;gap:8px}
   .sub-card .who{font-weight:700;color:var(--bark)}
   .sub-card .when{font-size:12px;color:var(--bark55)}
@@ -226,7 +231,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27c";
+const BUILD = "2026.07.27d";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -769,14 +774,14 @@ const HUBS=[
   ]},
   {key:'orders', title:'Orders', desc:'Supplier order lists', icon:'orders', sites:{
     Brighton:[
-      {label:'Weekly Orders & Bookers', route:'#/doc/order_monday_brighton'},
-      {label:'Cheeseman & Adams (Mondays)', route:'#/doc/order_adams_brighton'},
-      {label:'TG Fruits', route:'#/doc/order_tg_brighton'},
+      {label:'Weekly Orders & Bookers', route:'#/order/order_monday_brighton'},
+      {label:'Cheeseman & Adams (Mondays)', route:'#/order/order_adams_brighton'},
+      {label:'TG Fruits', route:'#/order/order_tg_brighton'},
       {label:'Fresho / Adams Delivery', ext:EXT.fresho},
-      {label:'Asda', route:'#/doc/order_asda_brighton'},
+      {label:'Asda', route:'#/order/order_asda_brighton'},
     ],
     Worthing:[
-      {label:'Monday List 2026', route:'#/doc/order_monday_worthing'},
+      {label:'Monday List 2026', route:'#/order/order_monday_worthing'},
     ],
   }},
   {key:'staff', title:'Staff', desc:'Handbook, holidays, training', icon:'staff', items:[
@@ -1012,7 +1017,7 @@ function viewManage(){
   let h=backbar("Management","#/mgmt");
   const scopeLabel = manager.scope==="ALL"?"all sites":manager.scope;
   h+=`<h1 class="page">Submitted Forms</h1><p class="sub">${esc(manager.email)} · ${esc(scopeLabel)}</p>`;
-  const types=[["all","All"],["start_of_day","Start of Day"],["end_of_day","End of Day"],["deep_cleans","Deep Cleans"],
+  const types=[["all","All"],["order","Orders"],["start_of_day","Start of Day"],["end_of_day","End of Day"],["deep_cleans","Deep Cleans"],
     ["accident","Accident/Incident"],["alcohol","Alcohol Training"],["safe_sheet","Safe Sheet"],["four_weekly","4-Weekly"]];
   h+=`<div class="mgmt-tabs">${types.map(([k,l])=>`<button data-f="${k}" class="${_mgmtFilter===k?'active':''}" onclick="window._setMgmtFilter('${k}')">${l}</button>`).join("")}</div>`;
   h+=`<div id="subsBody"><div class="spinner"></div></div>`;
@@ -1293,6 +1298,66 @@ function viewRefDoc(doc){
     <div class="acc-b">${esc(s.b)}</div></div>`).join("");
   shell(h);
 }
+/* ORDER FORMS: fillable supplier orders that email the store inbox + save for management */
+const STORE_EMAIL = { Brighton:"brighton@ldbrighton.com", Worthing:"worthing@ldbrighton.com" };
+function isOrderNote(h, line){
+  if(/^how to order/i.test(h)) return true;
+  return /^(minimum order|email |click & collect|pay out|orders@|email order)/i.test(line) || line.includes("@");
+}
+function orderSections(doc){
+  return doc.sections.map(s=>{
+    const notes=[], items=[];
+    s.b.split("\n").forEach(line=>{ const l=line.trim(); if(!l) return; if(isOrderNote(s.h,l)) notes.push(l); else items.push(l); });
+    return {h:s.h, notes, items};
+  });
+}
+let _orderItems=[];
+function viewOrder(key){
+  const doc=REFDOCS[key]; if(!doc) return viewHome();
+  _orderItems=[];
+  const email=STORE_EMAIL[store.site]||"";
+  let h=backbar("Orders","#/hub/orders");
+  h+=`<h1 class="page">${esc(doc.title)}</h1><p class="sub">${esc(doc.sub||"")} · ${esc(store.site)}</p>`;
+  h+=`<div class="note-box">Put the number you need next to each item, then Submit. This opens an email of the order to ${esc(email)} for you to send, and saves it for management.</div>`;
+  orderSections(doc).forEach(sec=>{
+    h+=`<div class="ord-h">${esc(sec.h)}</div>`;
+    sec.notes.forEach(n=> h+=`<div class="ord-note">${esc(n)}</div>`);
+    sec.items.forEach(it=>{
+      const idx=_orderItems.length; _orderItems.push(it);
+      h+=`<label class="ord-row"><span class="ord-name">${esc(it)}</span><input type="number" inputmode="numeric" min="0" class="ord-qty" data-idx="${idx}"></label>`;
+    });
+  });
+  h+=`<div class="field" style="margin-top:16px"><label class="q">Your name (optional)</label><input type="text" id="ordName" placeholder="Who is placing this order?"></div>`;
+  h+=`<div id="ordErr" class="err" style="margin:8px 0"></div>`;
+  h+=`<button class="pill" id="ordSubmit" onclick="window._submitOrder('${key}')">Submit order</button>`;
+  shell(h);
+}
+window._submitOrder=async function(key){
+  const doc=REFDOCS[key]; if(!doc) return;
+  const items=[];
+  document.querySelectorAll(".ord-qty").forEach(r=>{ const q=r.value.trim(); if(q!=="" && Number(q)>0) items.push(_orderItems[r.dataset.idx]+" × "+q); });
+  const err=$("#ordErr");
+  if(!items.length){ if(err) err.textContent="Add a quantity to at least one item before submitting."; window.scrollTo({top:0,behavior:'smooth'}); return; }
+  if(err) err.textContent="";
+  const name=($("#ordName")&&$("#ordName").value.trim())||"";
+  const email=STORE_EMAIL[store.site]||"";
+  const when=new Date().toLocaleString("en-GB",{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  if(fbReady){
+    try{ await db.collection("staff_submissions").add({
+      formType:"order", formTitle:"Order: "+doc.title, store:store.site,
+      submittedBy:name, data:{list:doc.title, items:items},
+      createdAt:firebase.firestore.FieldValue.serverTimestamp(), createdAtLocal:new Date().toISOString()
+    }); }catch(e){ console.error(e); }
+  }
+  const subject=store.site+" order - "+doc.title;
+  const body=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"+items.join("\n")+"\n";
+  window.location.href="mailto:"+email+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  shell(`<div class="center success">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#E9EEE3"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#4E6140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="big">Order ready</div>
+    <p class="sub">${items.length} item${items.length>1?"s":""} for ${esc(store.site)}. Your email app should open with the order to ${esc(email)}, just press send. It is also saved for management.</p>
+    <button class="pill" onclick="location.hash='#/hub/orders'">Back to Orders</button></div>`);
+};
 function viewDoc(key){
   if(REFDOCS[key]) return viewRefDoc(REFDOCS[key]);
   const d=DOCS[key]||{t:"Coming soon",n:"This section is being built."};
@@ -1317,6 +1382,7 @@ function router(){
   if(root==="settings") return viewSettings();
   if(root==="hub") return viewHub(parts[1]);
   if(root==="eh") return viewEH();
+  if(root==="order") return viewOrder(parts[1]);
   if(root==="risk") return viewRisk();
   if(root==="records") return viewRecords(parts[1]);
   if(root==="allergens"){
