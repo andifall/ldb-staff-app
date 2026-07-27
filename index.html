@@ -226,7 +226,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27b";
+const BUILD = "2026.07.27c";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -557,8 +557,8 @@ function renderField(f){
         <div class="quiz" data-quiz="${f.key}">${f.options.map((o,i)=>`<label class="opt"><input type="radio" name="${f.key}" value="${i}">${esc(o)}</label>`).join("")}</div></div>`;
     case "file":
       return `<div class="field"><label class="q">${esc(f.label)}${req}</label>${help}
-        <input type="file" accept="image/*" data-key="${f.key}">
-        <div class="help">On a phone this opens your camera or photo library. (Photo storage is switched on during setup.)</div></div>`;
+        <input type="file" accept="image/*" capture="environment" multiple data-key="${f.key}">
+        <div class="help">On a phone this opens your camera or photo library. You can add more than one. Photos are saved with the record.</div></div>`;
     case "temps":
       return `<div class="field"><div class="temps">
         ${f.units.map((u,i)=>{
@@ -634,8 +634,7 @@ function collect(def){
       rows.forEach(r=>{const inp=r.querySelector("input");if(inp.value!=="")t[r.dataset.name]={c:Number(inp.value),max:Number(r.dataset.max),ok:Number(inp.value)<=Number(r.dataset.max)};});
       data[f.key]=t;
     } else if(f.type==="file"){
-      const el=document.querySelector(`[data-key="${f.key}"]`);
-      if(el&&el.files&&el.files[0]) data[f.key]={filename:el.files[0].name,pending_upload:true};
+      // Photos are read and compressed asynchronously in processPhotos() at submit time.
     } else if(f.type==="signature"){
       const cv=document.querySelector(`[data-sig="${f.key}"]`);
       if(cv&&!cv._empty){ data[f.key]=cv.toDataURL("image/png"); }
@@ -663,6 +662,37 @@ function viewForm(formType){
   $("#submitBtn").addEventListener("click", ()=>submitForm(def));
 }
 
+// Shrink a photo to a compact JPEG data URL so it can be saved inside the record.
+function resizeImage(file, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(); const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      if(w>=h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+      else if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      try{ resolve(cv.toDataURL("image/jpeg",quality)); }catch(e){ reject(e); }
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.src=url;
+  });
+}
+// Read each photo field's files, compress them, store as an array of data URLs (max 4).
+async function processPhotos(def, data){
+  for(const f of resolveFields(def)){
+    if(f.type!=="file") continue;
+    const el=document.querySelector(`[data-key="${f.key}"]`);
+    if(!el||!el.files||!el.files.length) continue;
+    const urls=[];
+    for(const file of Array.from(el.files).slice(0,4)){
+      if(!file.type.startsWith("image/")) continue;
+      try{ urls.push(await resizeImage(file, 1000, 0.6)); }catch(e){}
+    }
+    if(urls.length) data[f.key]=urls;
+  }
+}
 async function submitForm(def){
   const {data,errs}=collect(def);
   const errBox=$("#formerr");
@@ -670,6 +700,7 @@ async function submitForm(def){
   errBox.textContent="";
   const btn=$("#submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
   if(!fbReady){ btn.disabled=false; btn.textContent="Submit"; errBox.textContent="Can't save yet - no connection to the database. Submitting works once the app is online / deployed."; return; }
+  try{ await processPhotos(def, data); }catch(e){}
   let alertUnits=[];
   if(data.temps){ for(const n in data.temps){ const t=data.temps[n]; if(t && t.ok===false) alertUnits.push(n+" - "+t.c+"°C"); } }
   const payload={
@@ -1037,7 +1068,13 @@ function renderSubDetail(s, back){
     if(v==null||v==="")continue;
     let val="";
     if(k==="temps"&&typeof v==="object"){ val="<br>"+Object.entries(v).map(([n,t])=>`&nbsp;&nbsp;${esc(n)}: <b style="color:${t.ok?'#166534':'#b91c1c'}">${esc(t.c)}°C</b>${t.ok?"":" ⚠️"}`).join("<br>"); }
-    else if(Array.isArray(v)){ val = v.length? "<br>"+v.map(x=>"&nbsp;&nbsp;• "+esc(x)).join("<br>") : "<span class='muted'>none ticked</span>"; }
+    else if(Array.isArray(v)){
+      if(v.length && v.every(x=>typeof x==="string" && x.startsWith("data:image"))){
+        val = "<br>"+v.map(x=>`<img src="${x}" style="max-width:240px;border:1px solid var(--bark10);border-radius:10px;margin:6px 6px 0 0">`).join("");
+      } else {
+        val = v.length? "<br>"+v.map(x=>"&nbsp;&nbsp;• "+esc(x)).join("<br>") : "<span class='muted'>none ticked</span>";
+      }
+    }
     else if(typeof v==="object"&&v.answer!==undefined){ val=esc(v.answer)+(v.correct===false?" <span class='bad-badge'>wrong</span>":""); }
     else if(typeof v==="object"&&v.filename){ val=esc(v.filename)+" <span class='muted'>(photo)</span>"; }
     else if(typeof v==="string"&&v.startsWith("data:image")){ val=`<br><img src="${v}" style="max-width:220px;border:1px solid #ddd;border-radius:8px">`; }
