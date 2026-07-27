@@ -231,7 +231,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27f";
+const BUILD = "2026.07.27g";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1037,7 +1037,12 @@ function subscribeSubs(){
     renderSubs();
   },err=>{ const b=$("#subsBody"); if(b) b.innerHTML=`<p class="err">Couldn't load submissions: ${esc(err.message)}<br><span class="muted">If this says permission denied, deploy the Firestore rules from the setup guide.</span></p>`; });
 }
-function fmtWhen(s){ let d=null; if(s.createdAt&&s.createdAt.seconds)d=new Date(s.createdAt.seconds*1000); else if(s.createdAtLocal)d=new Date(s.createdAtLocal); if(!d||isNaN(d))return ""; return d.toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}); }
+function fmtWhen(s){
+  let d=null; if(s.createdAt&&s.createdAt.seconds)d=new Date(s.createdAt.seconds*1000); else if(s.createdAtLocal)d=new Date(s.createdAtLocal); if(!d||isNaN(d))return "";
+  // Imported historical records with no recoverable time were set to exactly midday; show date only.
+  if(s.imported && /T12:00:00/.test(s.createdAtLocal||"")) return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  return d.toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+}
 function subHasAlert(s){ if(s.alert) return true; if(s.data&&s.data.temps){ return Object.values(s.data.temps).some(t=>t&&t.ok===false); } return false; }
 function renderSubs(){
   const body=$("#subsBody"); if(!body)return;
