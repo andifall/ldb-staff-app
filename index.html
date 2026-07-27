@@ -231,7 +231,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27j";
+const BUILD = "2026.07.27k";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1333,6 +1333,23 @@ function orderSections(doc){
     return {h:s.h, notes, items};
   });
 }
+// Which supplier an order line is ordered from. Read from the item text first
+// (leftmost match wins, so "Booker or Amazon" -> Booker), else the section heading.
+const SUPPLIERS=[
+  [/hb ingredients|\bHB\b/i,"HB Ingredients"],[/booker/i,"Booker"],[/amazon/i,"Amazon"],
+  [/cheeseman/i,"Cheeseman"],[/adams/i,"Adams"],[/\bA1\b/i,"A1 Coffee"],
+  [/decent/i,"Decent Packaging"],[/nisbets/i,"Nisbets"],[/buywholefoods|buy whole foods/i,"BuyWholeFoods"],
+  [/ringden/i,"Ringden Farm"],[/\bsuma\b/i,"Suma"],[/sainsbury/i,"Sainsbury's"],
+  [/realfoodsource/i,"realfoodsource"],[/acorn/i,"Acorn Foods"],[/nuts in bulk/i,"Nuts in Bulk"],
+  [/bird ?& ?blend/i,"Bird & Blend"],[/tg ?fruit/i,"TG Fruits"],[/asda/i,"Asda"],
+];
+function detectSupplier(text){
+  let best=null, pos=Infinity;
+  for(const [re,name] of SUPPLIERS){ const m=(text||"").match(re); if(m && m.index<pos){ pos=m.index; best=name; } }
+  return best;
+}
+function itemSupplier(item, section, docTitle){ return detectSupplier(item) || detectSupplier(section) || detectSupplier(docTitle) || "Other (please confirm)"; }
+function cleanItemName(item){ return item.split(" - ")[0].trim(); }
 let _orderItems=[];
 function viewOrder(key){
   const doc=REFDOCS[key]; if(!doc) return viewHome();
@@ -1345,7 +1362,7 @@ function viewOrder(key){
     h+=`<div class="ord-h">${esc(sec.h)}</div>`;
     sec.notes.forEach(n=> h+=`<div class="ord-note">${esc(n)}</div>`);
     sec.items.forEach(it=>{
-      const idx=_orderItems.length; _orderItems.push(it);
+      const idx=_orderItems.length; _orderItems.push({label:it, section:sec.h});
       h+=`<label class="ord-row"><span class="ord-name">${esc(it)}</span><input type="text" class="ord-qty" data-idx="${idx}" placeholder="e.g. 2, or 2 boxes"></label>`;
     });
   });
@@ -1357,7 +1374,7 @@ function viewOrder(key){
 window._submitOrder=async function(key){
   const doc=REFDOCS[key]; if(!doc) return;
   const ordered=[];
-  document.querySelectorAll(".ord-qty").forEach(r=>{ const q=r.value.trim(); if(q!=="") ordered.push({qty:q, item:_orderItems[r.dataset.idx]}); });
+  document.querySelectorAll(".ord-qty").forEach(r=>{ const o=_orderItems[r.dataset.idx]; const q=r.value.trim(); if(q!=="") ordered.push({qty:q, item:o.label, section:o.section}); });
   const err=$("#ordErr");
   if(!ordered.length){ if(err) err.textContent="Add a quantity to at least one item before submitting."; window.scrollTo({top:0,behavior:'smooth'}); return; }
   if(err) err.textContent="";
@@ -1374,13 +1391,25 @@ window._submitOrder=async function(key){
   }
   const subject=store.site+" order - "+doc.title;
   const btn=$("#ordSubmit"); if(btn){ btn.disabled=true; btn.textContent="Sending…"; }
-  const textBody=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"+ordered.map(o=>o.qty+"  -  "+o.item).join("\n")+"\n";
+  // group ordered items by supplier
+  const groups={};
+  ordered.forEach(o=>{ const sup=itemSupplier(o.item,o.section,doc.title); (groups[sup]=groups[sup]||[]).push(o); });
+  const supNames=Object.keys(groups).sort((a,b)=> a.startsWith("Other")?1 : b.startsWith("Other")?-1 : a.localeCompare(b));
+  const textBody=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"
+    +ordered.map(o=>o.qty+"  -  "+o.item).join("\n")
+    +"\n\n--- BY SUPPLIER ---\n"
+    +supNames.map(sup=>sup.toUpperCase()+"\n"+groups[sup].map(o=>"  "+o.qty+"  -  "+cleanItemName(o.item)).join("\n")).join("\n\n")+"\n";
+  const badge=(q,big)=>`<span style="display:inline-block;min-width:${big?26:22}px;padding:${big?'6px 12px':'4px 10px'};background:${big?'#FFBE5C':'#F0E8DF'};color:#3D2B1F;border-radius:20px;font-weight:800;font-size:${big?19:15}px;text-align:center;margin-right:${big?12:10}px">${esc(q)}</span>`;
   const htmlBody=`<div style="font-family:Arial,Helvetica,sans-serif;color:#3D2B1F;max-width:640px">`
     +`<h2 style="margin:0 0 6px">${esc(store.site)} order</h2>`
     +`<p style="margin:0 0 2px;font-weight:bold;font-size:16px">${esc(doc.title)}</p>`
     +`<p style="margin:0 0 2px;color:#7a6a5c">Placed by: ${esc(name||"(not given)")}</p>`
     +`<p style="margin:0 0 18px;color:#7a6a5c">${esc(when)}</p>`
-    +ordered.map(o=>`<div style="margin:0 0 12px;font-size:16px;line-height:1.5"><span style="display:inline-block;min-width:26px;padding:6px 12px;background:#FFBE5C;color:#3D2B1F;border-radius:20px;font-weight:800;font-size:19px;text-align:center;margin-right:12px">${esc(o.qty)}</span>${esc(o.item)}</div>`).join("")
+    +ordered.map(o=>`<div style="margin:0 0 12px;font-size:16px;line-height:1.5">${badge(o.qty,true)}${esc(o.item)}</div>`).join("")
+    +`<hr style="border:none;border-top:1px solid #e5ddd2;margin:24px 0 18px"><h3 style="margin:0 0 14px">Order by supplier</h3>`
+    +supNames.map(sup=>`<div style="margin:0 0 18px"><div style="font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:#3D2B1F;margin:0 0 8px">${esc(sup)}</div>`
+        +groups[sup].map(o=>`<div style="margin:0 0 7px;font-size:15px;line-height:1.4">${badge(o.qty,false)}${esc(cleanItemName(o.item))}</div>`).join("")
+        +`</div>`).join("")
     +`</div>`;
   // queue the order email in Firebase (Trigger Email extension sends it to the store inbox)
   let emailed=false;
