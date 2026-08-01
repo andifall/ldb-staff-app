@@ -386,7 +386,7 @@ function fieldCard(f,i,n){
     <div class="sec-tools">
       <button onclick="window._moveField(${i},-1)" ${i===0?'disabled':''}>&uarr; Up</button>
       <button onclick="window._moveField(${i},1)" ${i===n-1?'disabled':''}>&darr; Down</button>
-      ${k.del?`<button class="del" onclick="window._delField(${i})">Delete</button>`:``}
+      <button class="del" onclick="window._delField(${i})">Delete</button>
     </div>
   </div>`;
 }
@@ -406,7 +406,15 @@ function syncFormDom(){
 function genListKey(){ let k; do{ k='list_'+Math.random().toString(36).slice(2,7); }while(WF.fields.some(f=>f.key===k)); return k; }
 window._addFieldSection=function(){ syncFormDom(); WF.fields.push({type:'section',label:'New section'}); renderFormEditor(); };
 window._addFieldList=function(){ syncFormDom(); WF.fields.push({type:'checklist',key:genListKey(),items:['']}); renderFormEditor(); };
-window._delField=function(i){ syncFormDom(); const f=WF.fields[i]; if(!fieldKind(f).del) return; if(!confirm("Delete this part of the form?")) return; WF.fields.splice(i,1); renderFormEditor(); };
+window._delField=function(i){
+  syncFormDom(); const f=WF.fields[i]; if(!f) return; const k=fieldKind(f);
+  const structural = (f.type==='section'||f.type==='checklist');
+  const msg = structural
+    ? "Delete this part of the form?"
+    : "Delete the "+k.tag.toLowerCase()+" from this form?\n\nStaff will no longer see or fill in this part, and it will stop being recorded on new submissions. Past submissions keep what they already saved.";
+  if(!confirm(msg)) return;
+  WF.fields.splice(i,1); renderFormEditor();
+};
 window._moveField=function(i,dir){ syncFormDom(); const j=i+dir; if(j<0||j>=WF.fields.length) return; const t=WF.fields[i]; WF.fields[i]=WF.fields[j]; WF.fields[j]=t; renderFormEditor(); };
 window._resetFormOriginal=function(){ if(!confirm("Reset this form back to the original built-in version? Unsaved changes here will be lost. (Nothing is published until you press Save.)")) return; WF=loadFormFrom(DEFAULT_FORMS[curForm.type],curForm.type,curForm.store); renderFormEditor(); toast("Reset to original (not yet saved)"); };
 async function _saveFormCore(){
