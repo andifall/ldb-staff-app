@@ -179,6 +179,37 @@ function formsForStore(st){
   return rows.sort((a,b)=> a.title.localeCompare(b.title));
 }
 window._setStore=function(s){ pickStore=s; renderList(); };
+/* Is a specific store's version of a form actually different from the built-in? The
+   two site forms share one record holding both stores, so we compare this store's
+   fields (and the shared name/intro) rather than just "does a record exist". */
+function formEditedFor(type, store){
+  const o=formOv[type]; if(!o) return false;
+  const def=DEFAULT_FORMS[type];
+  if(def.sites){
+    const ov=o.sites && o.sites[store];
+    if(ov && JSON.stringify(ov)!==JSON.stringify(def.sites[store]||[])) return true;
+  } else {
+    if(o.fields && JSON.stringify(o.fields)!==JSON.stringify(def.fields||[])) return true;
+  }
+  if(o.title!=null && o.title!==(def.title||"")) return true;
+  if(o.intro!=null && o.intro!==(def.intro||"")) return true;
+  return false;
+}
+function formEditedWhen(type, store){
+  const o=formOv[type]; if(!o) return "";
+  return (o.stores && o.stores[store] && o.stores[store].at) || o.savedAt || "";
+}
+function fmtWhen(iso){
+  if(!iso) return "";
+  try{ const d=new Date(iso); if(isNaN(d)) return "";
+    return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})+", "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  }catch(e){ return ""; }
+}
+function editedLine(edited, iso){
+  if(!edited) return `<span class="badge default">Original</span>`;
+  const w=fmtWhen(iso);
+  return `<span class="badge edited">Edited</span>${w?` <span class="muted" style="font-size:11px">${esc(w)}</span>`:""}`;
+}
 function renderList(){
   curKey=null; W=null; curForm=null; WF=null;
   const st=activeStore();
@@ -201,11 +232,11 @@ function renderList(){
   const docs=docsForStore(st);
   if(!docs.length) h+=`<p class="hint">No order lists for ${esc(st)} yet.</p>`;
   docs.forEach(d=>{
-    const edited=!!overrides[d.key];
+    const ov=overrides[d.key]; const edited=!!ov;
     h+=`<div class="card doc-row">
-      <div class="meta"><div class="t">${esc((overrides[d.key]&&overrides[d.key].title)||d.title)}</div>
-        <div class="d">${esc((overrides[d.key]&&overrides[d.key].sub)||d.sub||"")}</div>
-        <div style="margin-top:7px"><span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
+      <div class="meta"><div class="t">${esc((ov&&ov.title)||d.title)}</div>
+        <div class="d">${esc((ov&&ov.sub)||d.sub||"")}</div>
+        <div style="margin-top:7px">${editedLine(edited, ov&&ov.savedAt)}</div></div>
       <button class="btn gold sm" onclick="window._edit('${d.key}')">Edit</button>
     </div>`;
   });
@@ -214,10 +245,10 @@ function renderList(){
   h+=`<div class="eyebrow">${esc(st)} daily forms</div>`;
   h+=`<p class="hint" style="margin:-4px 0 12px">Edit the tick lists and section headings. The temperature, photo, name and signature parts are kept as they are so nothing breaks.</p>`;
   formsForStore(st).forEach(r=>{
-    const edited=!!formOv[r.type];
+    const edited=formEditedFor(r.type, r.store);
     h+=`<div class="card doc-row">
       <div class="meta"><div class="t">${esc(r.title)}</div>
-        <div style="margin-top:7px"><span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
+        <div style="margin-top:7px">${editedLine(edited, formEditedWhen(r.type, r.store))}</div></div>
       <button class="btn gold sm" onclick="window._editForm('${r.type}','${r.store}')">Edit</button>
     </div>`;
   });
@@ -250,7 +281,7 @@ function renderEditor(){
   const d=W;
   let h=`<button class="btn ghost dark sm" onclick="window._backList()">&larr; All lists</button>
     <h1 class="page" style="margin-top:12px">Edit list</h1>
-    <p class="sub"><span class="badge store">${esc(d.store)}</span> ${overrides[d.key]?'<span class="badge edited">Edited</span>':'<span class="badge default">Original</span>'}</p>
+    <p class="sub"><span class="badge store">${esc(d.store)}</span> ${editedLine(!!overrides[d.key], overrides[d.key]&&overrides[d.key].savedAt)}</p>
     <div class="field"><label class="q">List name</label><input type="text" id="f_title" value="${esc(d.title)}"></div>
     <div class="field"><label class="q">Note under the name (optional)</label><input type="text" id="f_sub" value="${esc(d.sub)}"></div>
     <div class="eyebrow">Sections</div>
@@ -293,6 +324,7 @@ async function _saveCore(){
   W.sections=W.sections.filter(s=> (s.h&&s.h.trim()) || (s.b&&s.b.trim()) );
   const payload={ key:W.key, title:(W.title||"").trim(), sub:(W.sub||"").trim(), store:W.store, kind:W.kind,
     sections:W.sections.map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,"")})),
+    savedAt: new Date().toISOString(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy:user.email };
   await db.collection("content_docs").doc(W.key).set(payload);
 }
@@ -340,10 +372,10 @@ function fieldKind(f){
   }
 }
 function renderFormEditor(){
-  const d=WF; const edited=!!formOv[d.type];
+  const d=WF; const edited=formEditedFor(d.type, d.store);
   let h=`<button class="btn ghost dark sm" onclick="window._backList()">&larr; All lists &amp; forms</button>
     <h1 class="page" style="margin-top:12px">Edit form</h1>
-    <p class="sub"><span class="badge store">${esc(d.store)}</span> ${edited?'<span class="badge edited">Edited</span>':'<span class="badge default">Original</span>'}</p>
+    <p class="sub"><span class="badge store">${esc(d.store)}</span> ${editedLine(edited, formEditedWhen(d.type, d.store))}</p>
     <div class="field"><label class="q">Form name</label><input type="text" id="ff_title" value="${esc(d.title)}"></div>
     <div class="field"><label class="q">Intro note (shown at the top of the form)</label><textarea id="ff_intro" rows="2">${esc(d.intro)}</textarea></div>
     <div class="eyebrow">Form contents</div>
@@ -362,6 +394,7 @@ function renderFormEditor(){
         <button class="btn ghost dark sm" style="flex:1" onclick="window._resetFormOriginal()">Reset to original</button>
         ${edited?`<button class="btn ghost dark sm" style="flex:1;color:var(--danger);border-color:#E7C7C1" onclick="window._revertFormLive()">Undo my live edits</button>`:``}
       </div>
+      <p class="hint" style="text-align:center;margin-top:6px">Editing the <b>${esc(d.store)}</b> version only. The other store is not affected.</p>
     </div>`;
   root().innerHTML=h; window.scrollTo(0,0);
 }
@@ -440,6 +473,11 @@ async function _saveFormCore(){
   } else {
     payload.fields=WF.fields; delete payload.sites;
   }
+  // per-store "edited on" stamp so each store shows its own date
+  const nowIso=new Date().toISOString();
+  payload.stores = Object.assign({}, existing.stores||{});
+  payload.stores[WF.store] = { at: nowIso, by: user.email };
+  payload.savedAt=nowIso;
   payload.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
   payload.updatedBy=user.email;
   await db.collection("content_forms").doc(WF.type).set(payload);
@@ -453,9 +491,30 @@ window._saveForm=async function(){
   b.disabled=false; b.textContent="Save & publish to staff";
 };
 window._revertFormLive=async function(){
-  if(!confirm("Remove your saved edits for this form (both stores) and put the original built-in version back for staff? This cannot be undone.")) return;
-  try{ await db.collection("content_forms").doc(curForm.type).delete(); toast("Reverted to original"); WF=loadFormFrom(DEFAULT_FORMS[curForm.type],curForm.type,curForm.store); renderFormEditor(); }
-  catch(e){ $("#fMsg").innerHTML=`<div class="msg err">Couldn't revert: ${esc(e.message||e)}</div>`; }
+  const type=curForm.type, store=curForm.store, def=DEFAULT_FORMS[type];
+  if(!confirm("Undo your saved edits to the "+store+" version of this form and put the original back for staff? The other store is not affected. This cannot be undone.")) return;
+  try{
+    const o = formOv[type] ? JSON.parse(JSON.stringify(formOv[type])) : null;
+    if(!o || !def.sites){
+      // non-site form, or nothing live: just remove the whole record
+      await db.collection("content_forms").doc(type).delete();
+      delete formOv[type];
+    } else {
+      o.sites = o.sites || {};
+      o.sites[store] = JSON.parse(JSON.stringify(def.sites[store]));
+      if(o.stores) delete o.stores[store];
+      const allOriginal = Object.keys(def.sites).every(st=> JSON.stringify(o.sites[st]||def.sites[st])===JSON.stringify(def.sites[st]))
+        && (o.title==null||o.title===(def.title||"")) && (o.intro==null||o.intro===(def.intro||""));
+      if(allOriginal){ await db.collection("content_forms").doc(type).delete(); delete formOv[type]; }
+      else {
+        o.savedAt=new Date().toISOString();
+        o.updatedAt=firebase.firestore.FieldValue.serverTimestamp(); o.updatedBy=user.email;
+        await db.collection("content_forms").doc(type).set(o); formOv[type]=o;
+      }
+    }
+    toast("Reverted to original");
+    WF=loadFormFrom(DEFAULT_FORMS[type],type,store); renderFormEditor();
+  }catch(e){ $("#fMsg").innerHTML=`<div class="msg err">Couldn't revert: ${esc(e.message||e)}</div>`; }
 };
 </script>
 </body>
