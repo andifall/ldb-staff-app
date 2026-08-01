@@ -268,7 +268,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27p";
+const BUILD = "2026.07.27q";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1455,6 +1455,26 @@ const REFDOCS={
     {h:"Bird & Blend Teas", b:"Great British Cuppa (2 backup)\nEarl Grey Creme (1 backup)\nSunny Sencha Green (1 backup)\nPeppymint (1 backup)\nNearly Nirvana (1 backup)\nDeckchair Dreaming (1 backup)\nBreakfast's Ready Honey (1 backup)\nMorning Kick (1 backup)"},
   ]},
 };
+/* Live-editable content: order lists & reference docs can be overridden from the
+   `content_docs` collection (written by the editor app). Built-in REFDOCS is the
+   fallback, so nothing breaks before a doc has ever been edited. */
+let _docOverrides={};
+function getDoc(key){
+  const o=_docOverrides[key];
+  if(o && !o.hidden){
+    return { title:o.title||"", sub:o.sub||"", sections:(o.sections||[]).map(s=>({h:s.h||"",b:s.b||""})) };
+  }
+  return REFDOCS[key]||null;
+}
+function subscribeContentDocs(){
+  if(!fbReady) return;
+  db.collection("content_docs").onSnapshot(snap=>{
+    const o={}; snap.forEach(d=>{ const x=d.data()||{}; o[d.id]=x; });
+    _docOverrides=o;
+    const h=location.hash||"";
+    if(/^#\/(order|doc)\//.test(h)) router();
+  }, err=>{ console.warn("content_docs:", err && err.message); });
+}
 window._toggleSec=function(el){ el.closest(".acc-item").classList.toggle("open"); };
 function viewRefDoc(doc){
   let h=backbar("Home","#/");
@@ -1498,7 +1518,7 @@ function itemSupplier(item, section, docTitle){ return detectSupplier(item) || d
 function cleanItemName(item){ return item.split(" - ")[0].trim(); }
 let _orderItems=[];
 function viewOrder(key){
-  const doc=REFDOCS[key]; if(!doc) return viewHome();
+  const doc=getDoc(key); if(!doc) return viewHome();
   _orderItems=[];
   const email=STORE_EMAIL[store.site]||"";
   let h=backbar("Orders","#/hub/orders");
@@ -1518,7 +1538,7 @@ function viewOrder(key){
   shell(h);
 }
 window._submitOrder=async function(key){
-  const doc=REFDOCS[key]; if(!doc) return;
+  const doc=getDoc(key); if(!doc) return;
   const ordered=[];
   document.querySelectorAll(".ord-qty").forEach(r=>{ const o=_orderItems[r.dataset.idx]; const q=r.value.trim(); if(q!=="") ordered.push({qty:q, item:o.label, section:o.section}); });
   const err=$("#ordErr");
@@ -1575,7 +1595,7 @@ window._submitOrder=async function(key){
     <button class="pill" onclick="location.hash='#/hub/orders'">Back to Orders</button></div>`);
 };
 function viewDoc(key){
-  if(REFDOCS[key]) return viewRefDoc(REFDOCS[key]);
+  const gd=getDoc(key); if(gd) return viewRefDoc(gd);
   const d=DOCS[key]||{t:"Coming soon",n:"This section is being built."};
   shell(backbar("Home","#/")+`<h1 class="page">${esc(d.t)}</h1>
     <div class="note-box">${esc(d.n)}</div>
@@ -1628,6 +1648,8 @@ if(auth){
 // first paint - always render immediately, regardless of Firebase
 router();
 try{ clearTimeout(window.__ldBoot); }catch(e){}
+// live content overrides (order lists / docs edited in the editor app)
+try{ subscribeContentDocs(); }catch(e){}
 
 /* first-open "add to home screen" prompt (shown once per device) */
 function maybeShowInstallPrompt(){

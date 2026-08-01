@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#3D2B1F" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>Laughing Dog - Content Editor</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="LD Editor" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@600;700;800&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --cream:#FAF8F3; --bark:#3D2B1F; --blush:#F0E8DF; --golden:#FFBE5C; --paw:#C8A882; --sage:#8A9E7A;
+    --bark70:rgba(61,43,31,.70); --bark55:rgba(61,43,31,.55); --bark15:rgba(61,43,31,.15); --bark10:rgba(61,43,31,.10);
+    --danger:#B4433A; --danger-bg:#F7E7E2; --sage-bg:#E9EEE3; --sage-tx:#4E6140;
+    --shadow:0 3px 14px rgba(61,43,31,.08); --shadow-lg:0 8px 26px rgba(61,43,31,.12);
+    --head:'League Spartan',-apple-system,BlinkMacSystemFont,sans-serif; --body:'Montserrat',-apple-system,sans-serif; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--body);color:var(--bark);background:var(--blush);line-height:1.5;font-size:16px}
+  .app{max-width:720px;margin:0 auto;min-height:100vh;background:var(--cream);display:flex;flex-direction:column;box-shadow:0 0 60px rgba(61,43,31,.08)}
+  header.topbar{position:sticky;top:0;z-index:20;background:var(--bark);display:flex;align-items:center;gap:12px;
+    padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));border-bottom:1px solid rgba(0,0,0,.15)}
+  .brand{font-family:var(--head);font-weight:800;color:var(--cream);text-transform:uppercase;letter-spacing:.04em;font-size:16px}
+  .brand small{display:block;font-size:10px;letter-spacing:.14em;color:var(--golden);font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .content{flex:1;padding:18px 16px 60px}
+  h1.page{font-family:var(--head);font-weight:800;font-size:24px;margin:6px 0 4px;text-transform:uppercase;letter-spacing:.01em;line-height:1.08}
+  .sub{color:var(--bark55);font-size:14px;margin:0 0 18px}
+  .eyebrow{font-family:var(--head);color:var(--paw);font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:12px;margin:24px 0 10px}
+  label.q{display:block;font-weight:600;font-size:13px;margin:0 0 5px;color:var(--bark70)}
+  input[type=text],input[type=email],input[type=password],textarea{width:100%;font-family:var(--body);font-size:15px;color:var(--bark);
+    background:#fff;border:1px solid var(--bark15);border-radius:12px;padding:12px 14px;outline:none}
+  input:focus,textarea:focus{border-color:var(--golden);box-shadow:0 0 0 3px rgba(255,190,92,.25)}
+  textarea{resize:vertical;min-height:120px;line-height:1.5;white-space:pre-wrap}
+  .field{margin-bottom:14px}
+  button{font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border:none;border-radius:12px}
+  .btn{background:var(--bark);color:var(--cream);padding:13px 18px;font-size:14px}
+  .btn:active{transform:translateY(1px)}
+  .btn.gold{background:var(--golden);color:var(--bark)}
+  .btn.ghost{background:transparent;color:var(--cream);border:1px solid rgba(250,248,243,.4);padding:8px 14px;font-size:12px}
+  .btn.ghost.dark{color:var(--bark);border-color:var(--bark15)}
+  .btn.sm{padding:8px 12px;font-size:12px}
+  .btn.block{width:100%;padding:15px;font-size:15px}
+  .btn[disabled]{opacity:.5}
+  .card{background:#fff;border:1px solid var(--bark10);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .doc-row{display:flex;align-items:center;gap:12px}
+  .doc-row .meta{flex:1;min-width:0}
+  .doc-row .t{font-family:var(--head);font-weight:700;font-size:16px;color:var(--bark)}
+  .doc-row .d{font-size:12.5px;color:var(--bark55);margin-top:2px}
+  .badge{display:inline-block;font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:10px;
+    padding:3px 8px;border-radius:999px;vertical-align:1px}
+  .badge.store{background:var(--blush);color:var(--bark70)}
+  .badge.edited{background:var(--sage-bg);color:var(--sage-tx)}
+  .badge.default{background:#F2ECE2;color:var(--paw)}
+  .sec-card{background:#fff;border:1px solid var(--bark15);border-radius:14px;padding:14px;margin-bottom:12px}
+  .sec-tools{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .sec-tools button{background:var(--blush);color:var(--bark);padding:7px 11px;font-size:11px}
+  .sec-tools button.del{background:var(--danger-bg);color:var(--danger)}
+  .hint{font-size:12px;color:var(--bark55);margin:4px 0 0}
+  .bar{position:sticky;bottom:0;background:linear-gradient(to top,var(--cream) 70%,rgba(250,248,243,0));padding:14px 0 8px;margin-top:8px}
+  .msg{font-size:13px;padding:10px 14px;border-radius:10px;margin:10px 0}
+  .msg.ok{background:var(--sage-bg);color:var(--sage-tx)} .msg.err{background:var(--danger-bg);color:var(--danger)}
+  .center{min-height:70vh;display:flex;flex-direction:column;justify-content:center}
+  .muted{color:var(--bark55);font-size:13px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--bark);color:var(--cream);
+    padding:12px 18px;border-radius:999px;font-size:14px;box-shadow:var(--shadow-lg);opacity:0;transition:opacity .2s;z-index:60}
+  .toast.show{opacity:1}
+  a.link{color:var(--bark);font-size:13px}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="topbar"><div class="brand">Laughing Dog<small>Content Editor</small></div>
+    <div class="right" id="topRight"></div></header>
+  <div class="content" id="root"></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyARu0Pg2h8Irbm9n_HqU-FgeqV_3DJWgAE",
+  authDomain: "laughing-dog-loyalty.firebaseapp.com",
+  projectId: "laughing-dog-loyalty",
+  storageBucket: "laughing-dog-loyalty.firebasestorage.app",
+  messagingSenderId: "188424067804",
+  appId: "1:188424067804:web:daabdd16b2f842d85cb219",
+};
+var db=null, auth=null, fbReady=false;
+try{ if(typeof firebase!=="undefined"){ firebase.initializeApp(firebaseConfig); db=firebase.firestore(); auth=firebase.auth();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){}); fbReady=true; } }catch(e){ console.warn("Firebase:",e); }
+
+const ALLOWED=['simon@ldbrighton.com','brighton@ldbrighton.com','worthing@ldbrighton.com'];
+const SCOPE={'simon@ldbrighton.com':'ALL','brighton@ldbrighton.com':'Brighton','worthing@ldbrighton.com':'Worthing'};
+
+/* Built-in starting content, extracted verbatim from the staff app. This is only the
+   fallback the editor shows before a doc has ever been saved; once saved, the live
+   version in Firestore is the source of truth. */
+const DEFAULTS = {"order_monday_brighton":{"key":"order_monday_brighton","title":"Weekly Orders & Bookers","sub":"Brighton Monday order list","store":"Brighton","kind":"order","sections":[{"h":"Bookers - Ella's Booker List","b":"Sucranna light brown soft sugar 25kg - HB Ingredients (case 1 £33.12)\nChef William Gluten Free Baking Powder 900g (min 1) - Booker (1 £6.99 / 6 £37.99)\nChef William Bicarbonate of Soda 1kg (min 1) - Booker (1 £4.49 / 6 £24.49)\nMatthews Cotswold Flour Rollright Self Raising 16kg (1) - Booker (£10.99)\nCurtis Catering Walnut Pieces 1kg (1) - Booker (1 £11.49 / 6 £66.69)\nFlora Buttery 2kg (min 2) - Booker (1 £7.99 / 6 £46.35)\nFontinella Chick Peas in Salted Water 2.5kg (min 4) - Booker (1 £3.49 / 6 £18.99)\nKTC Sweetened Kesar Mango Pulp 850g (min 6) - Booker (case 6 £21.49)\nPineapple Chunks (min 6) - Booker (case 6 £21.49)\nJus-Rol Puff Pastry Block 1.5kg (min 3) - Booker (£1.75)\nHikari Medium Sweet White Miso Paste 400g (check with Ella) - Amazon (£5.10)\nKikkoman Tamari Gluten Free Soy Sauce 1L (min 1/2) - Amazon (£5.92 inc VAT)\nGochugaru Flakes (min 1/2) - Amazon ('Buy Again')\nPorridge Oats 5kg - Booker\nGolden Syrup (min 1) - Booker\nFreeze dried raspberries (check with Ella) - Booker or Amazon\nIcing Sugar 10kg (ask Ella) - Booker"},{"h":"Ella's Chocolate (HB / Nuts in Bulk)","b":"Tahini (1/2 x big backup tub, check with Ella) - Nuts in Bulk\nWhite Chocolate (1 backup) - HB\nDark Chocolate (1 backup) - HB\nCallebaut Alkalised 'Extra Brute' deep dark red cocoa powder (22-24% fat) 5kg (min 1) - HB or Amazon"},{"h":"Cafe Kitchen - Booker List","b":"Premium Chutney (6) - Booker or Adams (Fig Chutney 3kg)\nMacphie Salted Caramel Pot 1L (3) - Booker\nNutella 3kg (1) - Booker\nVegan Nutella 350g (2) - ask Simon, buy at Sainsbury's\nVermont Pure Canadian Maple Syrup 1L (12) - Booker (1 £13.99 / 6 £72.49)\nChef's Larder Poppy Seeds 600g (1) - Booker\nChef's Larder Glaze with Balsamic Vinegar of Modena 500ml (min 3) - Booker\nChef's Larder Extra Virgin Olive Oil 5L (2) - Booker\nWhite Wine Vinegar 1L (6) - Booker\nApple Cider Vinegar 1L (1) - Booker\nBalsamic Vinegar 500ml (1) - Booker\nHeinz Big Beans 12 x 2.62kg - Booker (case 6 £27.49)\nCraigellachie Smoked Atlantic Salmon 1kg (4) - Booker (£19.99)"},{"h":"Seeds & Spices - BuyWholeFoods.com","b":"Turmeric 1kg (£7.33)\nGinger Ground 500g (£6.10)\nWhole Black Peppercorns 250g (min 1) (£4.81)\nGround Coriander 500g (£4.13)\nCumin Ground 500g (£7.51)\nOregano 500g (£7.45)\nRosemary 500g (£4.24)\nThyme 500g (£5.75)\nNutmeg Ground 250g (£6.34)\nChilli Powder 250g (min 1) (£4.28)\nSmoked Paprika 500g (1) (£5.88)\nCinnamon Ground 500g gluten free (£5.78)\nNutritional Yeast 1kg (£23.04)\nBeetroot Powder 500g (£6.22)\nBrown Linseeds 2kg (£6.05)\nOrganic Chia Seeds 3kg (£24.49)\nOrganic Pumpkin Seeds 3kg (£33.67)\nOrganic Sunflower Seeds 3kg (£12.98)\nOrganic Hemp Protein Powder (50%) 1kg (£13.08)\nFlaked Almonds 1kg (£11.92)\nGround Almonds 2.5kg (£30.62)"},{"h":"General Booker List","b":"CleanPro+ Oven & Grill Cleaner 1L (min 9) - case size 6\nSea Salt 1.1kg (1) - £2.69\nChef's Larder Lemon Juice 1L (2) - (1 £3.29 / 6 £18.99)\nLichfield Salted Butter Portions 100s (2) - (1 £3.29 / 6 £18.99)\nHeinz Tomato Ketchup bottles (1 pack) - Booker\nHP Brown Sauce bottles (1 pack) - Booker\nEnglish Mustard (1 big bottle) - Booker\nFlying Goose Sriracha 455ml (min 4 bottles) - Booker (6 £15.99 / 1 £2.69)\nChef's Larder Vegan Mayo 1L (6, min 2) - Booker (case 6 £14.99)\nTyrrells Lightly Sea Salted Crisps 40g - Booker (case £12.79)\nTyrrells Sea Salt & Cider Vinegar Crisps 40g - Booker (case £12.79)\nTyrrells Mature Cheddar & Chive Crisps 40g - Booker (case £12.79)\nTyrrells Sweet Chilli & Red Pepper Crisps 40g (1/2 backup box) - Booker (case £12.79)\nSmooth Peanut Butter 1kg (3 x 1kg tubs) - Booker (3 £9.99 / 1 £3.99)\nZuma Hot Chocolate (min 2 x 1kg bags) - A1 (8 £72.99 / 1 £9.39)\nZuma Chai Powder (2 x 1kg tins) - A1 (£13.99)\nCadbury Chocolate Powder for duster 5kg (min 1/2 tub) - Booker (£36.99)\nChef's Larder Frozen Summer Fruits 1kg (4 backup) - Booker (£7.99)\nWinalot Shapes Dog Biscuits 800g (min 2 boxes) - Booker (case 5 £12.11)\n25kg granulated sugar (1/2 sack backup) - Booker (£16.49)\nPuly Caff Verde Cleaning Powder 1kg (2 backup) - A1 £9.59 or Amazon £8.20\nBaking Parchment Paper 440mm x 50m (2) - Booker (single £11.89 / case 9 £85.19)"},{"h":"Amazon Only","b":"Wrapmaster 3000 (1 backup box)\nTiptree Fine Cut Orange Marmalade Portions 72 x 28g (min 1) (£27.99)\nMatcha Powder 200g (1 backup) (case 4 £65.96 / 1 £16.49)\nZeina Cashew Butter 1kg (2 full x 1kg tubs) (£14.95)"},{"h":"Syrups (A1, occasionally Amazon)","b":"Sweetbird Caramel Syrup (min 2) - A1 (£7.69)\nSweetbird Sugar Free Vanilla Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Vanilla Syrup 1L (min 2) - A1 (£7.69)\nSweetbird Hazelnut Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Pumpkin Spice Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Peach Iced Tea Syrup 1L (min 2) - A1 (£7.69)\nSweetbird Watermelon Iced Green Tea Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Passion Fruit Lemon Iced Tea Syrup 1L (min 1) - A1 (£7.69)\nSweetbird Raspberry Iced Tea Syrup 1L (min 1) - A1 (£7.69)\nStrawberry Monin Puree (min 2) - Booker (case 4 £56.03) / Amazon £14.50 / A1\nMango Monin Puree (min 1) - Amazon (£18.79) or A1\nMonin Raspberry Puree (min 2) - Amazon (£17.50) or A1"},{"h":"Drinks Shelf - Alcohol & Mushroom","b":"Camden Hells Lager Beer (24 cans)\nHepworth Sussex Traditional Pale Ale (24 bottles)\n\nJaga Mushroom Drinks (1 box backup each):\nWatermelon\nMixed Berry\nMexican Lime and Mint\nPomelo and Passionfruit"},{"h":"Drinks - Glass Bottled (Booker)","b":"Highland Spring Water - Still (1 backup)\nHighland Spring Water - Sparkling (1 backup)\nClassic Coca Cola glass bottle 330ml (2 x case of 24)\nDiet Coca Cola glass bottle 330ml (2 x case of 24)"},{"h":"Drinks - Ringden Farm (01580 879385)","b":"Apple Juice - 2 crates at all times\nOrange Juice - 2 crates at all times\nApple & Mango Juice (1 backup crate)\nSparkling Orange & Apple cans (1 backup crate)\nSparkling Apple can (1 backup crate)\nSparkling Apple & Elderflower can (1 backup crate)\nMango & Apple sparkling (1 backup)\nRaspberry & Apple sparkling (1 backup)"},{"h":"Drinks - Karma Drinks (from Suma)","b":"Counter Culture Mango, Ginger & Lime Kombucha (2 boxes)\nCounter Culture Citrus Yuzu / Try Dry Kombucha (2 boxes)\nCounter Culture Raspberry Elderflower Kombucha (2 boxes)\nKarma Summer Orangeade 24 x 330ml (2 boxes)\nKarma Gingerella Ginger Ale 24 x 330ml (2 boxes)\nKarma Razza Raspberry Lemonade 24 x 330ml (2 boxes)\nKarma Lemony Lemon 24 x 330ml (2 boxes)"},{"h":"Juices & Dairy-Free Milks (Booker)","b":"Grapefruit Ting (1)\nCawston Press Apple & Mango 18 x 200ml (2) - £8.49\nCawston Press Apple & Pear 18 x 200ml (2) - £8.49\nOatly Oat Drink Barista Edition 6 x 1L (8) - £8.69\nAlpro Barista Almond Long Life 12 x 1L (1) - £17.35\nAlpro Barista Soya Long Life 12 x 1L (4) - £17.35\nAlpro Barista Coconut Long Life 12 x 1L (2) - £15.85"},{"h":"Takeaway (Bookers T/A)","b":"Ecopac 250 Assorted Colour Straight Paper Straw (2) - (1 £2.49 / 20 £46.99)\nEcopac 80 Assorted Colour Straight SMOOTHIE Paper Straw (3) - (1 £2.49 / 20 £46.99)\nCompost Me Brown Recycled Napkins 500pk (10) - (1 £5.99 / 10 £46.99)\nDemerara Sugar (1 bag)\nWhite Sugar Sachets (1 box of 1000)\nBrown Sugar Sachets (1 box of 1000)\nSweet & Low Sweetener (1 box of 1000)\nWooden Stirrers (1 backup pack)\nWooden Knives (1 pack)\nWooden Forks (1 pack)\nBrown Paper Bags with handle (2 x 1k)\nLarge Square Paper Bags (1 backup pack)\nMustard Sachets (1 box)\nMayo Sachets (1 box)\nKetchup Sachets (1 box)\nBrown Sauce Sachets (1 box)"},{"h":"Cleaning (Bookers)","b":"Clear Vinyl Gloves (2 packs)\nClear Bin Sacks (2 backup)\nBlue Roll (x5)\nYellow Cloth (x3)\nBlue Cloth (x3)\nFloor Gel (2 backup)\nThick Bleach (2 backup)\nWashing Up Liquid (1 box)\nScale Remover (6 bottles)\nJantex Grill Blocks (6)\nGlass Cleaner Concentrate (1 backup)\nAntibac Concentrate (1 backup)\nAutomatic Rinse Aid 10L (1 backup)\nDishwasher Detergent 10L (at least 1 backup)\nMain Dishwasher Salt Granules (4 boxes)\nGlass Dishwasher Salt Granules (3 small bags)\nSponge Scourers (1 pack of 10)\nMetal Scourers (1 pack of 10)\nMop Heads (2 heads)\nHand Soap (5L)\nToilet Roll"},{"h":"Teas","b":"Tea Sacks (1 box)\nEnglish Breakfast 'Great British Cuppa' (4) - 1kg £25.20\nEarl Grey Creme (2) - 1kg £39.16\nGreen 'Sunny Sencha' (1) - 1kg £35.96\nPeppermint 'Peppy Mint' (1) - 1kg £39.60\nJasmine, Orange & Spearmint 'Nearly Nirvana' (1) - 1kg £120.08\nChamomile & Apple 'Deckchair Dreaming' (1) - 1kg £56.76\nLemon & Ginger (1) - 1kg £46.08"},{"h":"Boho Gelato","b":"Vanilla (1) - 1kg £46.08\nCookies and Cream (1) - 1kg £46.08\n*Special Flavour* (1) - 1kg £46.08\nVG Sea Salt Peanut Butter & Caramel (1) - 1kg £46.08\nVG Chocolate & Cherry (1) - 1kg £46.08\nVG Raspberry & Elderflower Sorbet (1) - 1kg £46.08"},{"h":"Drinks Sauces etc. (Booker)","b":"Mini Marshmallows (1 pack)\nOreo Crumbs (1 box backup)\nBiscoff Crumbs (1 box backup)\nBiscoff (full lads) (1 box)\nBiscoff Sauce (4 backup)\nChocolate Sauce (4 backup)"},{"h":"Take Away Misc (DecentPackaging / Booker)","b":"Smoothie Cups (1 backup box) - Decent\nSmoothie Lids (1 backup box) - Decent\nTA Sleeves (small) - Decent or Booker\nTA Sleeves (large) - Decent or Booker\n6oz Cups (2 backup) - Decent\n8oz Cups (2 backup) - Decent\n8oz Lids (2 backup) - Decent\n12oz Cups (2 backup) - Decent\n12oz Lids (2 backup) - Decent\nFood Boxes (2 backup) - Booker\nEspresso Cups (if low) - Decent\n2-Cup Holder (1 backup box) - Decent or Booker\n4-Cup Holder (1 backup box) - Decent or Booker"}]},"order_adams_brighton":{"key":"order_adams_brighton","title":"Cheeseman & Adams","sub":"Brighton Monday order · standing quantities","store":"Brighton","kind":"order","sections":[{"h":"Cheeseman","b":"Minimum order £40. Email enquiries: enquiries@thecheeseman.co.uk\n\nCheddar Cheese - 1 bag\nFeta 200g - 4\nCream Cheese - 1\nForesters Smoked Cheese 2kg wheel - 2\nApplewood Smoked VG Slices - 4\nSalted Butter - 1\nUnsalted Butter - 1"},{"h":"Adams","b":"Dates 2kg - 2\nRice Vinegar bottle - 2\nQuinoa (kg) - 2\nDijon Mustard tub - 1\nBaking Powder big tub - 3\nCorn Flour - 2\nLemons - 9kg\nCarrot (kg) - 2\nDill - 1\nCapers - 1\nTofu (small) - 4 (10 for the weekend)\nAerosol Cream - 2\nSliced Halloumi - 2\nFrozen All-Butter Croissants - 1\nDesiccated Coconut (kg) - 3\nSunflower Oil - 3\nBalsamic Vinegar 5L - 1\nApple Sauce - 2\nVanilla Essence - 2\nChilli Flakes - 2\nGarlic Powder - 1\nOnion Powder - 1\nCaster Sugar 25kg - 1\nPlain Flour 16kg x3 - 1\nDove's Farm GF Flour - 1"}]},"order_tg_brighton":{"key":"order_tg_brighton","title":"TG Fruits","sub":"Brighton fruit & veg order · standing quantities","store":"Brighton","kind":"order","sections":[{"h":"How to order","b":"Email order to orders@tgfruits.com, or call 01273 503390 and leave a message. Always state the type of unit you want, e.g. 2 HEADS of cos lettuce, 4 SINGLE Granny Smith apples, and so on."},{"h":"Order List","b":"Eggs Trays (Large Free Range) - 6 trays (keep 1 backup box at all times; 2 boxes for the weekend)\nBanana box - 1\nRocket - 3 bags\nOranges - 1 box\nBlueberries - 2 punnets\nRaspberries - 2 punnets\nCos Lettuce - 4 heads\nBaby Spinach - 5 bags\nWhole Milks - 24 single\nSkinny Milks - 4 single\nBaby Watercress - 5 punnets\nCurly Parsley - 2 bunches\nCoriander - 2 bunches\nSpring Onion - 1 bunch\nRed Onions - 2 kg\nWhite Onions - 2 single\nMedium Aubergine - 2 single\nRed Peppers - 2 single\nYellow Peppers - 2 single\nCourgette - 2 single\nPeeled Garlic in tub - 1 kg\nFresh Ginger - 1 kg\nLimes - 3 kg\nButton Mushrooms - 2 boxes\nAvocado box - 3 boxes\nSalad Tomatoes - 2 boxes\nRegular Cherry Tomatoes - 1 box (2 for the weekend)"}]},"order_asda_brighton":{"key":"order_asda_brighton","title":"Asda","sub":"Brighton Click & Collect","store":"Brighton","kind":"order","sections":[{"h":"How to order","b":"Click & Collect. Pay out cash from the till, pay in the change, and leave the receipt in the till."},{"h":"Food","b":"Blueberries (small punnet)\nVG Feta\nFeta\nKale\nBlack Beans\nAlpro Plain Yogurt (2)\nEnglish Breakfast tea bags\nDecaf tea\nCadbury Chocolate\nCaramel Sauce (Coronation)\n'Free From' Baking Powder\nVG Whipped Cream\nWhipped Cream Aerosol\nOranges\nTable Salt\nGround Black Pepper\nGarlic Granules\nIcing Sugar\nGluten Free Bread\nCauliflower\nSpinach\nRomaine Lettuce\nSweet Potatoes\nStrawberries\nSumac Powder\nPomegranate Seeds"},{"h":"Not Food / Misc","b":"Kitchen Roll\nHand Soaps\nAir Freshener\nParacetamol\nSanitary Products\nCello Tape\nGlass Dishwasher Salt\nSharpies\nMr Sheen\nPink Stuff"}]},"order_monday_worthing":{"key":"order_monday_worthing","title":"Monday List 2026","sub":"Worthing Monday order · standing backups","store":"Worthing","kind":"order","sections":[{"h":"Bookers - Food, Baking & Sauces","b":"Craigellachie Smoked Atlantic Salmon 1kg - Booker (£19.99)\nChef's Larder UHT Real Dairy Cream 500g (1 backup) - Booker (1 £3.59 / 6 £9.49)\nBlaze 100% Smooth Peanut Butter 1kg (2 backup) - Booker (case 3 £9.99)\nChef's Larder English Mustard 2.27L (1/2 bottle backup) - Booker (1 £10.49 / 2 £18.69)\nHaribo Chamallows Mini Marshmallows 1kg (1 backup) - Booker (£6.35)\nWhite Wine Vinegar 5L (1 backup) - Booker (£3.79)\nExtra Virgin Olive Oil 5L (1 backup) - Booker or Adams (£35.99)\nBalsamic Vinegar of Modena 2L (1 backup) - Booker (£9.99)\nGlaze with Balsamic Vinegar of Modena 500ml (3 backup) - Booker (£4.49)\nVegan Mayo 1L (3 backup) - Booker (1 £2.99 / 6 £14.99)\nVegetable Oil 1L 6-pack (1 backup) - Booker (case 6 £9.99)\nBiscoff Topping 1kg (2 backup) - Booker (case 6 £64.59)\nBiscoff Biscuit Crumbs 750g (1 backup) - Booker (1 £4.69 / 6 £32.99)\nLotus Biscoff Biscuits 300pk (1/4 box backup) - Booker (£19.29)\nPreema Vanilla Essence 500ml (1/2 bottle backup) - Amazon (£6.25)\nSilver Spoon Granulated Sugar 25kg (1/2 bag backup) - Booker (£16.49)\nBillington's Demerara Sugar 3kg (1 backup) - Booker (case 4 £28.96)\nNoel's Chocolate Topping Sauce 1kg (2 backup) - Booker (case 6 £24.99)\nVermont Pure Canadian Maple Syrup 1L (6 backup) - Booker (case 6 £72.49)\nNutella 3kg tub (1 backup) - Booker (case 2 £41.99)\nChef's Menu Crushed Chillies 350g (1 backup) - Booker (case 6 £28.49)\nJack's Table Salt 750g for kitchen (1 backup) - Booker (case 6 £4.39)\nTiptree Fine Cut Orange Marmalade Pots 72x28g (1 backup) - Amazon (£27.17)\nMarmite 4 x 24 x 8g portions (1 backup) - Booker (£7.69)\nLemon Juice 1L (1 backup) - Adams (£2.62)\nChopped Dates 2.5kg (2 backup) - BuyWholeFoods (£9.82) or Booker 2kg (£8.49)"},{"h":"Bookers - Drinks","b":"Oatly (10 backup) - Booker or Adams (case 6 £9.49)\nAlpro Barista Almond 1L (2 backup) - Booker (case 12 £18.89)\nAlpro Barista Coconut 1L (3 backup) - Booker (case 12 £18.89)\nAlpro Barista Soya 1L (4 backup) - Booker (case 12 £19.25)\nCoke (1 backup)\nDiet Coke (1 backup)\nSan Pellegrino Lemon (1 backup)\nSparkling Water (1 backup)\nStill Water (1 backup)\nCawston Press (4 backup)"},{"h":"Bookers - Ketchup, Sauces & Crisps","b":"Heinz Tomato Ketchup 300ml multipack (1 backup) - Booker (case 10 £19.09)\nHeinz Tomato Ketchup 4L refill (1 backup) - Booker (case 2 £35.49)\nHP Original Brown Sauce 450g (2 backup) - Booker (case 12 £30.15)\nHP Brown Sauce 4L refill (1 backup) - Booker (case 2 £30.49)\nKettle Chips Salt & Vinegar (1 backup)\nKettle Chips Salted (1 backup)\nKettle Chips Cheese & Onion (1 backup)\nDog Biscuits multipack (1 backup)\nDog Ice Cream (1 box backup) - Acorn Foods\nCandied Hazelnuts (1 backup) - realfoodsource.co.uk"},{"h":"Bookers - Packaging & Takeaway","b":"Aurelia Medium Delight toilet roll (2 backup) - Booker (case 10 £35.99)\nCaterPro Aluminium Foil 60m x 300mm (1 backup) - Booker (£5.39)\nBaking Parchment (1 backup) - Nisbets (5 for free delivery, £8.15 each)\nBioPak Natural Paper Napkins (8 backup) - Booker (case 10 £56.39)\nCaterPro 200 Paper Smoothie Straws Green Stripe (2 boxes) - Booker (case 20 £98.39)\nStraws (1 backup, 2 for summer)\nLarge Takeaway Boxes (1 backup)\nSmall Cake Takeaway Boxes (1 backup)\nSmall Takeaway Cake Bags (1 backup)"},{"h":"Bookers - Cleaning & Sundries","b":"CleanPro 10 Zinc Coated Scourers Medium (1 backup) - Booker (1 £5.99 / 18 £88.79)\nCleanPro 5 Sponge Scourers (3 backup) - Booker (case 24 £51.59, cut sponges in half)\nCleanPro 50 All Purpose Cloths Yellow 60x30cm (3 backup) - Booker (case 15 £76.79, cut yellow cloths in half)\nCleanPro 200 Large Refuse Sacks Clear (1 backup) - Booker (£23.99)\nClear Bin Liners (1 backup)\nWashing Up Liquid (2 backup)\nDishwasher Salt (1 backup)\nBlue Roll (3 backup)\nToilet Roll (2 backup)\nHand Soap (1 backup)\nFloor Gel (1 backup)\nBleach (2 backup)\nGlass Cleaner Spray Bottle (1 backup)\nAntibac Spray Bottle (2 backup)\nDishwasher Detergent (1 backup, rarely need)\nDishwasher Rinse Aid (1 backup, rarely need)\nMop Heads (2 backup)"},{"h":"BuyWholeFoods Online","b":"Cinnamon Ground 500g gluten free (1 backup) - £5.84\nSmoked Paprika 500g (1 backup) - £5.88\nTurmeric 1kg (1 backup) - £7.33\nThyme (1 backup)\nOregano (1 backup)\nBlack Peppercorns 250g (min 1, 1 backup) - £4.95\nCoarse Ground Black Pepper 500g - £8.55\nNatural Sea Salt (coarse) 1kg (2 backup) - £1.88\nChia Seeds (2 backup)"},{"h":"Amazon","b":"Flax Seed (1 backup)\nCacao Powder (1 backup)\nProtein Powder (1 backup)\nCashew Butter (1 backup)\nCafiza (1 backup)\nGrill Block, pack of 4 (1 backup)\nNutritional Yeast (1 backup)\nPost-it Notes (1 backup)\nSellotape (1 backup)\nKids Chalk (1 backup)"},{"h":"A1 Coffee","b":"Caramel Syrup (2 backup)\nVanilla Syrup (2 backup)\nHazelnut Syrup (1 backup)\nPeach Iced Tea Syrup (2 backup)\nRaspberry Iced Tea Syrup (1 backup)\nWatermelon Iced Tea Syrup (1 backup)\nPassionfruit Iced Tea Syrup (1 backup)\nZuma Matcha Powder (1 backup)\nZuma Hot Chocolate bag (6 backup)\nZuma Chai Powder (2 backup)\nCheck crazy matcha syrups (rarely need)"},{"h":"Bird & Blend Teas","b":"Great British Cuppa (2 backup)\nEarl Grey Creme (1 backup)\nSunny Sencha Green (1 backup)\nPeppymint (1 backup)\nNearly Nirvana (1 backup)\nDeckchair Dreaming (1 backup)\nBreakfast's Ready Honey (1 backup)\nMorning Kick (1 backup)"}]}};
+
+const $=s=>document.querySelector(s);
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const root=()=>$("#root");
+var user=null, overrides={}, W=null, curKey=null, ovUnsub=null;
+
+function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"),2200); }
+
+/* ---------- auth ---------- */
+if(auth){
+  auth.onAuthStateChanged(u=>{
+    if(u && ALLOWED.includes((u.email||"").toLowerCase())){ user={email:u.email.toLowerCase(),scope:SCOPE[u.email.toLowerCase()]}; startOverrides(); renderTop(); renderList(); }
+    else { user=null; if(u){ try{auth.signOut();}catch(e){} } renderTop(); renderLogin(u?("This account ("+esc(u.email)+") is not a management login."):""); }
+  });
+} else { renderLogin("This device can't reach the database right now."); }
+
+function renderTop(){
+  const r=$("#topRight");
+  if(user){ r.innerHTML=`<span class="badge store" style="color:var(--golden);background:transparent;border:1px solid rgba(250,248,243,.4)">${esc(user.scope==='ALL'?'All stores':user.scope)}</span><button class="btn ghost" onclick="window._logout()">Log out</button>`; }
+  else { r.innerHTML=""; }
+}
+window._logout=function(){ try{auth.signOut();}catch(e){} curKey=null; W=null; };
+
+function renderLogin(err){
+  curKey=null; W=null;
+  root().innerHTML=`<div class="center">
+    <h1 class="page">Sign in</h1>
+    <p class="sub">Management login only. Changes you make here update the staff app live.</p>
+    <div class="field"><label class="q">Email</label><input type="email" id="e" autocomplete="username" placeholder="brighton@ldbrighton.com"></div>
+    <div class="field"><label class="q">Password</label><input type="password" id="p" autocomplete="current-password"></div>
+    ${err?`<div class="msg err">${esc(err)}</div>`:""}
+    <div id="le" class="msg err" style="display:none"></div>
+    <button class="btn block" id="lb">Sign in</button>
+  </div>`;
+  $("#lb").onclick=doLogin; $("#p").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+}
+async function doLogin(){
+  const email=($("#e").value||"").trim().toLowerCase(), pass=$("#p").value||"";
+  const le=$("#le"); le.style.display="none";
+  if(!email||!pass){ le.textContent="Enter your email and password."; le.style.display="block"; return; }
+  if(!ALLOWED.includes(email)){ le.textContent="That email is not a management login."; le.style.display="block"; return; }
+  const b=$("#lb"); b.disabled=true; b.textContent="Signing in...";
+  try{ await auth.signInWithEmailAndPassword(email,pass); }
+  catch(e){ b.disabled=false; b.textContent="Sign in"; le.textContent = /password|credential|user/i.test(e.code||"")?"Email or password not recognised.":("Sign-in failed: "+(e.message||e)); le.style.display="block"; }
+}
+
+/* ---------- live overrides ---------- */
+function startOverrides(){
+  if(ovUnsub||!fbReady) return;
+  ovUnsub=db.collection("content_docs").onSnapshot(snap=>{
+    const o={}; snap.forEach(d=>o[d.id]=d.data()||{}); overrides=o;
+    if(!curKey) renderList();
+  }, err=>console.warn("overrides:",err&&err.message));
+}
+
+/* ---------- doc list ---------- */
+function docsForUser(){
+  return Object.values(DEFAULTS)
+    .filter(d=> user.scope==='ALL' || d.store==='both' || d.store===user.scope )
+    .sort((a,b)=> (a.store+a.title).localeCompare(b.store+b.title));
+}
+function renderList(){
+  curKey=null; W=null;
+  const docs=docsForUser();
+  const byStore={};
+  docs.forEach(d=>{ (byStore[d.store]=byStore[d.store]||[]).push(d); });
+  let h=`<h1 class="page">Order lists</h1><p class="sub">Tap a list to edit its items and quantities. Saving updates the staff app within seconds.</p>`;
+  Object.keys(byStore).sort().forEach(storeName=>{
+    h+=`<div class="eyebrow">${esc(storeName)}</div>`;
+    byStore[storeName].forEach(d=>{
+      const edited=!!overrides[d.key];
+      h+=`<div class="card doc-row">
+        <div class="meta"><div class="t">${esc((overrides[d.key]&&overrides[d.key].title)||d.title)}</div>
+          <div class="d">${esc((overrides[d.key]&&overrides[d.key].sub)||d.sub||"")}</div>
+          <div style="margin-top:7px"><span class="badge store">${esc(d.store)}</span> <span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
+        <button class="btn gold sm" onclick="window._edit('${d.key}')">Edit</button>
+      </div>`;
+    });
+  });
+  h+=`<p class="hint" style="margin-top:18px">More sections (daily checklists, reference docs, the handbook, and screen layout) are coming to this editor next. For now it covers your order lists.</p>`;
+  root().innerHTML=h; window.scrollTo(0,0);
+}
+
+/* ---------- editor ---------- */
+function loadWorking(key){
+  const src = overrides[key] ? overrides[key] : DEFAULTS[key];
+  return { key, store:DEFAULTS[key].store, kind:DEFAULTS[key].kind||'doc',
+    title:src.title||"", sub:src.sub||"",
+    sections:(src.sections||[]).map(s=>({h:s.h||"",b:s.b||""})) };
+}
+window._edit=function(key){ curKey=key; W=loadWorking(key); renderEditor(); };
+
+function syncFromDom(){
+  if(!W) return;
+  const t=$("#f_title"); if(t) W.title=t.value;
+  const s=$("#f_sub"); if(s) W.sub=s.value;
+  document.querySelectorAll("[data-sec]").forEach(card=>{
+    const i=+card.getAttribute("data-sec");
+    if(!W.sections[i]) return;
+    W.sections[i].h=card.querySelector(".s_h").value;
+    W.sections[i].b=card.querySelector(".s_b").value;
+  });
+}
+function renderEditor(){
+  const d=W;
+  let h=`<button class="btn ghost dark sm" onclick="window._backList()">&larr; All lists</button>
+    <h1 class="page" style="margin-top:12px">Edit list</h1>
+    <p class="sub"><span class="badge store">${esc(d.store)}</span> ${overrides[d.key]?'<span class="badge edited">Edited</span>':'<span class="badge default">Original</span>'}</p>
+    <div class="field"><label class="q">List name</label><input type="text" id="f_title" value="${esc(d.title)}"></div>
+    <div class="field"><label class="q">Note under the name (optional)</label><input type="text" id="f_sub" value="${esc(d.sub)}"></div>
+    <div class="eyebrow">Sections</div>
+    <p class="hint" style="margin:-4px 0 12px">Each section is a heading and a list of items, one per line. Quantities can go on the line, e.g. "Feta 200g - 4". Suppliers are picked up from the wording, like "- Booker" or "- Amazon".</p>
+    <div id="secs">`;
+  d.sections.forEach((s,i)=>{ h+=secCard(s,i,d.sections.length); });
+  h+=`</div>
+    <button class="btn ghost dark block" style="margin-top:4px" onclick="window._addSec()">+ Add a section</button>
+    <div id="edMsg"></div>
+    <div class="bar">
+      <button class="btn block" id="saveBtn" onclick="window._save()">Save &amp; publish to staff</button>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn ghost dark sm" style="flex:1" onclick="window._resetOriginal()">Reset to original</button>
+        ${overrides[d.key]?`<button class="btn ghost dark sm" style="flex:1;color:var(--danger);border-color:#E7C7C1" onclick="window._revertLive()">Undo my live edits</button>`:``}
+      </div>
+    </div>`;
+  root().innerHTML=h; window.scrollTo(0,0);
+}
+function secCard(s,i,n){
+  return `<div class="sec-card" data-sec="${i}">
+    <div class="field" style="margin-bottom:8px"><label class="q">Section heading</label><input type="text" class="s_h" value="${esc(s.h)}"></div>
+    <div class="field" style="margin-bottom:0"><label class="q">Items (one per line)</label><textarea class="s_b" rows="6">${esc(s.b)}</textarea></div>
+    <div class="sec-tools">
+      <button onclick="window._moveSec(${i},-1)" ${i===0?'disabled':''}>&uarr; Up</button>
+      <button onclick="window._moveSec(${i},1)" ${i===n-1?'disabled':''}>&darr; Down</button>
+      <button class="del" onclick="window._delSec(${i})">Delete section</button>
+    </div>
+  </div>`;
+}
+window._backList=function(){ if(dirtyGuard()) renderList(); };
+window._addSec=function(){ syncFromDom(); W.sections.push({h:"New section",b:""}); renderEditor(); };
+window._delSec=function(i){ syncFromDom(); if(!confirm("Delete this whole section?")) return; W.sections.splice(i,1); renderEditor(); };
+window._moveSec=function(i,dir){ syncFromDom(); const j=i+dir; if(j<0||j>=W.sections.length) return; const t=W.sections[i]; W.sections[i]=W.sections[j]; W.sections[j]=t; renderEditor(); };
+window._resetOriginal=function(){ if(!confirm("Reset this list back to the original built-in version? Your unsaved changes here will be lost. (Nothing is published until you press Save.)")) return; W=loadFromDefault(curKey); renderEditor(); toast("Reset to original (not yet saved)"); };
+function loadFromDefault(key){ const src=DEFAULTS[key]; return { key, store:src.store, kind:src.kind||'doc', title:src.title||"", sub:src.sub||"", sections:(src.sections||[]).map(s=>({h:s.h||"",b:s.b||""})) }; }
+function dirtyGuard(){ return true; }
+
+async function _saveCore(){
+  syncFromDom();
+  W.sections=W.sections.filter(s=> (s.h&&s.h.trim()) || (s.b&&s.b.trim()) );
+  const payload={ key:W.key, title:(W.title||"").trim(), sub:(W.sub||"").trim(), store:W.store, kind:W.kind,
+    sections:W.sections.map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,"")})),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy:user.email };
+  await db.collection("content_docs").doc(W.key).set(payload);
+}
+window._save=async function(){
+  const b=$("#saveBtn"); const m=$("#edMsg");
+  if(!W.title.trim() && !($("#f_title")&&$("#f_title").value.trim())){ m.innerHTML=`<div class="msg err">Give the list a name first.</div>`; return; }
+  b.disabled=true; b.textContent="Saving...";
+  try{ await _saveCore(); toast("Published to staff"); m.innerHTML=`<div class="msg ok">Saved. The staff app now shows this version.</div>`; }
+  catch(e){ m.innerHTML=`<div class="msg err">Couldn't save: ${esc(e.message||e)}</div>`; }
+  b.disabled=false; b.textContent="Save & publish to staff";
+};
+window._revertLive=async function(){
+  if(!confirm("Remove your saved edits and put the original built-in list back for staff? This cannot be undone.")) return;
+  try{ await db.collection("content_docs").doc(curKey).delete(); toast("Reverted to original"); W=loadFromDefault(curKey); renderEditor(); }
+  catch(e){ $("#edMsg").innerHTML=`<div class="msg err">Couldn't revert: ${esc(e.message||e)}</div>`; }
+};
+</script>
+</body>
+</html>
