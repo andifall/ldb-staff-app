@@ -108,7 +108,7 @@ const DEFAULT_FORMS = {"start_of_day":{"key":"start_of_day","title":"Start of th
 const $=s=>document.querySelector(s);
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const root=()=>$("#root");
-var user=null, overrides={}, formOv={}, W=null, WF=null, curKey=null, curForm=null, ovUnsub=null, fovUnsub=null;
+var user=null, overrides={}, formOv={}, W=null, WF=null, curKey=null, curForm=null, ovUnsub=null, fovUnsub=null, pickStore=null;
 
 function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"),2200); }
 
@@ -164,49 +164,60 @@ function startOverrides(){
 }
 
 /* ---------- doc list ---------- */
-function docsForUser(){
+function activeStore(){ return user.scope==='ALL' ? (pickStore||'Brighton') : user.scope; }
+function docsForStore(st){
   return Object.values(DEFAULTS)
-    .filter(d=> user.scope==='ALL' || d.store==='both' || d.store===user.scope )
-    .sort((a,b)=> (a.store+a.title).localeCompare(b.store+b.title));
+    .filter(d=> d.store===st || d.store==='both' )
+    .sort((a,b)=> a.title.localeCompare(b.title));
 }
 function formStores(f){ return f.sites ? Object.keys(f.sites) : ['Brighton']; }
-function formsForUser(){
+function formsForStore(st){
   const rows=[];
   Object.values(DEFAULT_FORMS).forEach(f=>{
-    formStores(f).forEach(st=>{
-      if(user.scope==='ALL' || st===user.scope) rows.push({type:f.key, store:st, title:f.title});
-    });
+    if(formStores(f).includes(st)) rows.push({type:f.key, store:st, title:f.title});
   });
-  return rows.sort((a,b)=> (a.store+a.title).localeCompare(b.store+b.title));
+  return rows.sort((a,b)=> a.title.localeCompare(b.title));
 }
+window._setStore=function(s){ pickStore=s; renderList(); };
 function renderList(){
   curKey=null; W=null; curForm=null; WF=null;
+  const st=activeStore();
   let h=`<h1 class="page">Editor</h1><p class="sub">Edit your order lists and daily forms. Saving updates the staff app within seconds.</p>`;
 
+  // ----- Store selector -----
+  if(user.scope==='ALL'){
+    h+=`<div class="field" style="margin-bottom:20px"><label class="q">Which store are you editing?</label>
+      <select id="storeSel" onchange="window._setStore(this.value)"
+        style="width:100%;font-family:var(--body);font-size:16px;font-weight:600;color:var(--bark);background:#fff;border:1px solid var(--bark15);border-radius:12px;padding:13px 14px;outline:none">
+        <option value="Brighton" ${st==='Brighton'?'selected':''}>Brighton</option>
+        <option value="Worthing" ${st==='Worthing'?'selected':''}>Worthing</option>
+      </select></div>`;
+  } else {
+    h+=`<div style="margin-bottom:18px"><span class="badge store" style="font-size:12px;padding:5px 12px">${esc(st)}</span></div>`;
+  }
+
   // ----- Order lists -----
-  const docs=docsForUser();
-  const byStore={}; docs.forEach(d=>{ (byStore[d.store]=byStore[d.store]||[]).push(d); });
-  h+=`<div class="eyebrow" style="margin-top:8px">Order lists</div>`;
-  Object.keys(byStore).sort().forEach(storeName=>{
-    byStore[storeName].forEach(d=>{
-      const edited=!!overrides[d.key];
-      h+=`<div class="card doc-row">
-        <div class="meta"><div class="t">${esc((overrides[d.key]&&overrides[d.key].title)||d.title)}</div>
-          <div class="d">${esc((overrides[d.key]&&overrides[d.key].sub)||d.sub||"")}</div>
-          <div style="margin-top:7px"><span class="badge store">${esc(d.store)}</span> <span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
-        <button class="btn gold sm" onclick="window._edit('${d.key}')">Edit</button>
-      </div>`;
-    });
+  h+=`<div class="eyebrow" style="margin-top:4px">${esc(st)} order lists</div>`;
+  const docs=docsForStore(st);
+  if(!docs.length) h+=`<p class="hint">No order lists for ${esc(st)} yet.</p>`;
+  docs.forEach(d=>{
+    const edited=!!overrides[d.key];
+    h+=`<div class="card doc-row">
+      <div class="meta"><div class="t">${esc((overrides[d.key]&&overrides[d.key].title)||d.title)}</div>
+        <div class="d">${esc((overrides[d.key]&&overrides[d.key].sub)||d.sub||"")}</div>
+        <div style="margin-top:7px"><span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
+      <button class="btn gold sm" onclick="window._edit('${d.key}')">Edit</button>
+    </div>`;
   });
 
   // ----- Daily forms -----
-  h+=`<div class="eyebrow">Daily forms</div>`;
+  h+=`<div class="eyebrow">${esc(st)} daily forms</div>`;
   h+=`<p class="hint" style="margin:-4px 0 12px">Edit the tick lists and section headings. The temperature, photo, name and signature parts are kept as they are so nothing breaks.</p>`;
-  formsForUser().forEach(r=>{
+  formsForStore(st).forEach(r=>{
     const edited=!!formOv[r.type];
     h+=`<div class="card doc-row">
       <div class="meta"><div class="t">${esc(r.title)}</div>
-        <div style="margin-top:7px"><span class="badge store">${esc(r.store)}</span> <span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
+        <div style="margin-top:7px"><span class="badge ${edited?'edited':'default'}">${edited?'Edited':'Original'}</span></div></div>
       <button class="btn gold sm" onclick="window._editForm('${r.type}','${r.store}')">Edit</button>
     </div>`;
   });
