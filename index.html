@@ -268,7 +268,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27q";
+const BUILD = "2026.07.27r";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -749,7 +749,7 @@ function collect(def){
 }
 
 function viewForm(formType){
-  const def=FORMS[formType];
+  const def=getForm(formType);
   if(!def){ return viewStub(formType); }
   const site=store.site;
   const back = def.management ? "#/mgmt" : "#/";
@@ -1209,7 +1209,7 @@ function renderSubs(){
     const flag=alert?`<span class="bad-badge">temp alert</span>`:"";
     return `<div class="sub-card${alert?' alert':''}" onclick="window._openSub('${s.id}')">
       <div class="top"><span class="who">${esc(s.submittedBy||"-")}${flag}</span><span class="when">${esc(fmtWhen(s))}</span></div>
-      <div class="type">${esc((FORMS[s.formType]&&FORMS[s.formType].title)||s.formTitle||s.formType)} · ${esc(s.store||"")}</div>
+      <div class="type">${esc((getForm(s.formType)&&getForm(s.formType).title)||s.formTitle||s.formType)} · ${esc(s.store||"")}</div>
     </div>`;
   }).join("");
 }
@@ -1231,7 +1231,7 @@ function sortedTemps(v){
 }
 function renderSubDetail(s, back){
   let h=backbar("Back", back||"#/manage");
-  h+=`<h1 class="page">${esc((FORMS[s.formType]&&FORMS[s.formType].title)||s.formTitle||s.formType)}</h1>`;
+  h+=`<h1 class="page">${esc((getForm(s.formType)&&getForm(s.formType).title)||s.formTitle||s.formType)}</h1>`;
   h+=`<p class="sub">${esc(s.store||"")} · ${esc(fmtWhen(s))} · ${s.submittedBy?("by "+esc(s.submittedBy)):"no name recorded"}</p>`;
   const d=s.data||{};
   const rows=[];
@@ -1258,7 +1258,7 @@ function renderSubDetail(s, back){
   shell(h);
 }
 function prettyKey(k,formType){
-  const def=FORMS[formType]; if(def){const f=allFieldDefs(def).find(x=>x.key===k); if(f&&f.label)return f.label;}
+  const def=getForm(formType); if(def){const f=allFieldDefs(def).find(x=>x.key===k); if(f&&f.label)return f.label;}
   return k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
 }
 
@@ -1466,6 +1466,16 @@ function getDoc(key){
   }
   return REFDOCS[key]||null;
 }
+/* Live-editable forms: the daily forms (start/end of day, prep) can be overridden
+   from `content_forms`. The override carries the whole form shape (title, intro and
+   the per-store field arrays), merged over the built-in so anything not edited, and
+   any form never edited, still uses the built-in version. */
+let _formOverrides={};
+function getForm(type){
+  const base=FORMS[type]; const o=_formOverrides[type];
+  if(o && !o.hidden) return Object.assign({}, base||{}, o);
+  return base||null;
+}
 function subscribeContentDocs(){
   if(!fbReady) return;
   db.collection("content_docs").onSnapshot(snap=>{
@@ -1474,6 +1484,12 @@ function subscribeContentDocs(){
     const h=location.hash||"";
     if(/^#\/(order|doc)\//.test(h)) router();
   }, err=>{ console.warn("content_docs:", err && err.message); });
+  db.collection("content_forms").onSnapshot(snap=>{
+    const o={}; snap.forEach(d=>{ const x=d.data()||{}; o[d.id]=x; });
+    _formOverrides=o;
+    const h=location.hash||"";
+    if(/^#\/form\//.test(h)) router();
+  }, err=>{ console.warn("content_forms:", err && err.message); });
 }
 window._toggleSec=function(el){ el.closest(".acc-item").classList.toggle("open"); };
 function viewRefDoc(doc){
