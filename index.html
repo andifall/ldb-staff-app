@@ -183,6 +183,7 @@
   .dish-block.free{border-color:#CCD8C2;background:var(--sage-bg)}
   .dish-block .dbh{font-family:var(--head);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px;color:var(--bark)}
   .ing-txt{color:var(--bark70);font-size:14px;white-space:pre-line;background:#fff;border:1px solid var(--bark10);border-radius:14px;padding:14px 16px}
+  .ing-txt strong{color:var(--bark);font-weight:700}
   .acc-item{border:1px solid var(--bark10);border-radius:14px;margin-bottom:10px;background:#fff;overflow:hidden;box-shadow:var(--shadow)}
   .acc-h{width:100%;text-align:left;background:none;border:0;cursor:pointer;padding:15px 16px;font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:14px;color:var(--bark);display:flex;justify-content:space-between;align-items:center;gap:10px}
   .acc-h .caret{color:var(--paw);transition:transform .15s;font-size:16px}
@@ -267,7 +268,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27o";
+const BUILD = "2026.07.27p";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -994,6 +995,44 @@ const ALLERGEN_COLS=[
 // Firestore stores each allergen as "contains", "trace", or null/absent (= free from).
 function alState(v){ if(v==="contains")return "c"; if(v==="trace"||v==="traces"||v==="may")return "t"; return "n"; }
 
+// Emphasise the UK allergens inside an ingredients blurb, the way the allergen app does,
+// so EHO can see them at a glance. Longer phrases are listed first so they win over shorter ones.
+const ALLERGEN_TERMS=[
+  // cereals containing gluten
+  "cereals containing gluten","cereal containing gluten","wholewheat","wheat flour","wheat","gluten","barley","malted barley","malt","rye","oats","oat","spelt","kamut","rusk","semolina","durum","couscous","triticale",
+  // milk / dairy
+  "buttermilk","milk","butter","cheese","halloumi","cream","clotted cream","creme fraiche","whey","yoghurt","yogurt","lactose","ghee","casein","mascarpone","mozzarella","parmesan","dairy",
+  // eggs
+  "eggs","egg",
+  // soya
+  "soya beans","soya bean","soybeans","soybean","soya","soy","tofu","edamame","tempeh",
+  // peanuts
+  "peanuts","peanut","groundnuts","groundnut",
+  // tree nuts
+  "tree nuts","brazil nuts","brazil nut","macadamia","pistachios","pistachio","hazelnuts","hazelnut","almonds","almond","walnuts","walnut","cashews","cashew","pecans","pecan","pine nuts","nuts","nut",
+  // sesame
+  "sesame seeds","sesame","tahini",
+  // fish
+  "anchovies","anchovy","mackerel","haddock","salmon","tuna","cod","fish",
+  // crustaceans
+  "crustaceans","crustacean","langoustine","prawns","prawn","shrimp","crab","lobster","crayfish",
+  // molluscs
+  "molluscs","mollusc","mussels","mussel","oysters","oyster","scallops","scallop","squid","octopus","clams","clam","cockles","whelks","snails",
+  // mustard
+  "wholegrain mustard","mustard",
+  // celery
+  "celeriac","celery",
+  // sulphites
+  "sulphur dioxide","sulfur dioxide","metabisulphite","sulphites","sulphite","sulfites","sulfite","e220","e221","e222","e223","e224","e226","e227","e228",
+  // lupin
+  "lupins","lupin"
+];
+const ALLERGEN_RE=new RegExp("\\b("+ALLERGEN_TERMS.map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/ /g,"\\s+")).join("|")+")\\b","gi");
+function boldAllergens(text){
+  // Escape first, then wrap allergen words in <strong> (safe: we only add our own tags).
+  return esc(text||"").replace(ALLERGEN_RE, m=>`<strong>${m}</strong>`);
+}
+
 let allergenUnsub=[];
 function clearAllergenSubs(){ allergenUnsub.forEach(u=>{try{u()}catch(e){}}); allergenUnsub=[]; }
 let _cats=null,_items=null,_alSearch="",_alCat=null,_alDish=null;
@@ -1081,7 +1120,7 @@ function viewAllergensDish(id){
   h+=`<h1 class="page">${esc(it.name||"")}</h1><p class="sub">${esc(it.store==="both"?"Brighton & Worthing":it.store||store.site)}</p>`;
   h+=`<div class="dish-block contains"><div class="dbh">Contains</div>${contains.length?`<div class="chips">${contains.map(l=>`<span class="chip yes">${esc(l)}</span>`).join("")}</div>`:`<p class="muted">Nothing listed</p>`}</div>`;
   if(traces.length) h+=`<div class="dish-block traces"><div class="dbh">May contain traces</div><div class="chips">${traces.map(l=>`<span class="chip trace">${esc(l)}</span>`).join("")}</div></div>`;
-  if(it.ingredients) h+=`<div class="sec-title" style="font-size:16px">Ingredients</div><div class="ing-txt">${esc(it.ingredients)}</div>`;
+  if(it.ingredients) h+=`<div class="sec-title" style="font-size:16px">Ingredients</div><div class="ing-txt">${boldAllergens(it.ingredients)}</div>`;
   h+=`<p class="muted" style="font-size:12px;margin-top:14px">We use all 14 allergens in our kitchen, so cross-contamination is always possible. This shows what a dish contains or may contain traces of. If anything is unclear, check with the kitchen.</p>`;
   shell(h);
 }
