@@ -47,6 +47,12 @@
   .sitepill{margin-left:auto;font-family:var(--head);font-size:12px;font-weight:600;color:var(--cream);text-transform:uppercase;letter-spacing:.08em;
     background:transparent;border:1px solid rgba(250,248,243,.35);padding:8px 14px;border-radius:999px;cursor:pointer}
   .sitepill:hover{background:rgba(250,248,243,.10)}
+  .who-chip{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;cursor:pointer;padding:2px 2px}
+  .who-chip b{color:var(--cream);font-size:13px;font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who-chip em{color:var(--golden);font-style:normal;font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:9px}
+  .who-chip + .sitepill{margin-left:10px}
+  select.sel{width:100%;font-family:var(--body);font-size:16px;color:var(--bark);background:#fff;border:1px solid var(--bark15);border-radius:12px;padding:13px 14px;outline:none}
+  select.sel:focus{border-color:var(--golden);box-shadow:0 0 0 3px rgba(255,190,92,.22)}
   .content{flex:1;padding:18px 16px 44px}
   h1.page{font-family:var(--head);font-weight:800;font-size:26px;color:var(--bark);margin:6px 0 4px;text-transform:uppercase;letter-spacing:.01em;line-height:1.05}
   .sub{color:var(--bark55);font-size:14px;margin:0 0 18px}
@@ -80,6 +86,21 @@
   .hub-ic svg{width:24px;height:24px;stroke:var(--bark);fill:none;stroke-width:1.7}
   .hub-tile.gold .hub-ic{background:var(--golden)}
   .hub-txt .hub-t{font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:14px;color:var(--bark)}
+  .fc-badge{background:var(--danger);color:#fff;font-family:var(--body);font-weight:700;font-size:11px;min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:999px;padding:0 5px;margin-left:6px;vertical-align:1px}
+  .fc-card{background:#fff;border:1px solid var(--bark10);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .fc-card.bad{border-color:#E7C7C1;background:var(--danger-bg)}
+  .fc-card.ok{border-color:#CFE0C4;background:var(--sage-bg)}
+  .fc-card h3{font-family:var(--head);font-weight:700;font-size:15px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.03em}
+  .fc-rota{margin-top:8px;padding-top:8px;border-top:1px dashed var(--bark15);font-size:13px}
+  .fc-rota b{font-family:var(--head);text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--bark55);display:block;margin-bottom:4px}
+  .ss-total{background:var(--bark);color:var(--cream);border-radius:16px;padding:18px 20px;text-align:center;margin-bottom:16px}
+  .ss-total .amt{font-family:var(--head);font-weight:800;font-size:34px;line-height:1}
+  .ss-total .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--golden);margin-bottom:6px}
+  .ss-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:11px 14px;background:#fff;border:1px solid var(--bark10);border-radius:12px;margin-bottom:8px}
+  .ss-row .r-main{flex:1;min-width:0}
+  .ss-row .r-amt{font-weight:700;font-family:var(--head)}
+  .ss-row .r-amt.in{color:var(--sage-tx)} .ss-row .r-amt.out{color:var(--danger)}
+  .ss-row .r-bal{font-size:12px;color:var(--bark55)}
   .hub-txt .hub-d{font-size:12.5px;color:var(--bark55);margin-top:2px;line-height:1.35}
   /* list rows (sub pages) */
   .rowlist{display:flex;flex-direction:column;gap:10px}
@@ -268,12 +289,46 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.07.27r";
+const BUILD = "2026.08.01g";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
 };
 let manager = null; // {email, scope}
+
+/* ---------- Staff identity (name + position, saved per device) ---------- */
+const POSITIONS = [["barista","Barista"],["supervisor","Supervisor"],["management","Management"]];
+function posLabel(p){ const f=POSITIONS.find(x=>x[0]===p); return f?f[1]:""; }
+function roleRank(p){ return p==='management'?2 : p==='supervisor'?1 : 0; }
+function roleAtLeast(r){ return !!me && roleRank(me.position) >= roleRank(r); }
+function loadIdentity(){ try{ const s=localStorage.getItem("ld_identity"); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function saveIdentity(o){ try{ localStorage.setItem("ld_identity", JSON.stringify(o)); }catch(e){} }
+var me = loadIdentity();   // {staffId, name, position, store}
+let staffDocUnsub=null;
+function watchMyStaffDoc(){
+  if(!fbReady || !me || !me.staffId || staffDocUnsub) return;
+  staffDocUnsub = db.collection("staff").doc(me.staffId).onSnapshot(function(d){
+    if(!d.exists){ me=null; try{ localStorage.removeItem("ld_identity"); }catch(e){} try{staffDocUnsub();}catch(e){} staffDocUnsub=null; router(); return; }
+    const x=d.data()||{}; let changed=false;
+    if(x.active===false){ me=null; try{ localStorage.removeItem("ld_identity"); }catch(e){} try{staffDocUnsub();}catch(e){} staffDocUnsub=null; router(); return; }
+    if(x.position && x.position!==me.position){ me.position=x.position; changed=true; }
+    if(x.name && x.name!==me.name){ me.name=x.name; changed=true; }
+    if(changed){ saveIdentity(me); subscribeRoleData(); router(); }
+  }, function(err){ console.warn("staff doc:", err&&err.message); });
+}
+function isNameField(f){ return !!f && f.key==='name' && (f.type==='text'||f.type==='name'); }
+// If someone registered before the rules were live, their record only saved on the
+// phone (staffId is null). Once we can reach the database, create it so they appear
+// in the editor for management. Runs at most once per device (until it succeeds).
+async function ensureStaffDoc(){
+  if(!fbReady || !me || me.staffId) return;
+  try{
+    const ref=await db.collection("staff").add({ name:me.name, position:me.position,
+      store:me.store||store.site, active:true, createdAtLocal:new Date().toISOString(),
+      createdAt:firebase.firestore.FieldValue.serverTimestamp() });
+    me.staffId=ref.id; saveIdentity(me); watchMyStaffDoc();
+  }catch(e){ console.warn("ensureStaffDoc:", e&&e.message); }
+}
 
 /* ---------- Utils ---------- */
 const $ = (s,el=document)=>el.querySelector(s);
@@ -287,8 +342,10 @@ const DOG = '<svg viewBox="0 0 24 24"><path d="M4 5c0-1 1.5-1.5 2.5-.8L9 6h6l2.5
 /* ---------- Header ---------- */
 function header(){
   const site = store.site || "";
+  const who = me ? `<span class="who-chip" onclick="location.hash='#/settings'"><b>${esc(me.name)}</b><em>${esc(posLabel(me.position))}</em></span>` : "";
   return `<header class="topbar">
     <div class="logo" onclick="location.hash='#/'"><img class="logo-img" src="${LOGO}" alt="Laughing Dog"></div>
+    ${who}
     <button class="sitepill" onclick="location.hash='#/settings'">${esc(site||"Choose site")} ▾</button>
   </header>`;
 }
@@ -507,6 +564,15 @@ const FORMS = {
     ]
   },
 
+  kitchen_logs: {
+    title:"Kitchen Logs", type:"kitchen_logs",
+    intro:"Every Friday, take a photo of the kitchen logs and upload it here. It saves into Environmental Health as our record that we're keeping on top of the kitchen paperwork.",
+    fields:[
+      {type:"file",key:"photo",label:"Photo(s) of this week's kitchen logs",optional:true},
+      {type:"textarea",key:"notes",label:"Anything to note? (optional)",optional:true},
+    ]
+  },
+
   deep_cleans: {
     title:"Deep Cleans", type:"deep_cleans",
     intro:"Log completed deep cleans here - thank you!",
@@ -700,9 +766,16 @@ window._flipSign=function(btn){
   inp.focus();
 };
 
+/* Fields to actually show/collect: once a person is identified, the trailing
+   "Name" field is dropped because their name is filled in automatically. */
+function formFields(def){
+  let fs=resolveFields(def);
+  if(me) fs=fs.filter(f=>!isNameField(f));
+  return fs;
+}
 function collect(def){
   const data={}; const errs=[];
-  for(const f of resolveFields(def)){
+  for(const f of formFields(def)){
     if(f.type==="section"||f.type==="note") continue;
     const label=f.label||f.key;
     if(f.type==="text"||f.type==="textarea"||f.type==="number"||f.type==="date"||f.type==="time"){
@@ -752,13 +825,14 @@ function viewForm(formType){
   const def=getForm(formType);
   if(!def){ return viewStub(formType); }
   const site=store.site;
-  const back = def.management ? "#/mgmt" : "#/";
-  let html = backbar(def.management?"Management":"Home", back);
+  const back = (def.management && manager) ? "#/mgmt" : "#/";
+  let html = backbar((def.management && manager)?"Management":"Home", back);
   html += `<h1 class="page">${esc(def.title)}</h1><p class="sub">${esc(site||"")}</p>`;
   if(def.unverified) html += `<div class="note-box">⚠️ ${esc(def.intro)}</div>`;
   else if(def.intro) html += `<div class="note-box">${esc(def.intro)}</div>`;
   html += `<form id="theform" onsubmit="return false">`;
-  html += resolveFields(def).map(renderField).join("");
+  if(me) html += `<div class="note-box" style="background:var(--sage-bg);color:var(--sage-tx)">Filling in as <b>${esc(me.name)}</b>. Your name is added automatically.</div>`;
+  html += formFields(def).map(renderField).join("");
   html += `<div id="formerr" class="err"></div>`;
   html += `<button class="pill cta submit" id="submitBtn">Submit</button></form>`;
   shell(html);
@@ -809,12 +883,16 @@ async function submitForm(def){
   if(data.temps){ for(const n in data.temps){ const t=data.temps[n]; if(t && t.ok===false) alertUnits.push(n+" - "+t.c+"°C"); } }
   const payload={
     formType:def.type, formTitle:def.title, store:store.site,
-    submittedBy:data.name||"", data:data, createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    submittedBy:(me&&me.name)||data.name||"",
+    submittedById:(me&&me.staffId)||null, submittedByPos:(me&&me.position)||null,
+    data:data, createdAt:firebase.firestore.FieldValue.serverTimestamp(),
     createdAtLocal:new Date().toISOString(),
     alert: alertUnits.length>0, alertUnits: alertUnits,
   };
   try{
     await db.collection("staff_submissions").add(payload);
+    try{ await upsertDailyStatus(def, data, alertUnits); }catch(e){ console.warn("daily_status:", e&&e.message); }
+    try{ await upsertMonthlyStatus(def, data); }catch(e){ console.warn("monthly_status:", e&&e.message); }
     viewSuccess(def);
   }catch(err){
     console.error(err);
@@ -828,13 +906,13 @@ async function submitForm(def){
 }
 
 function viewSuccess(def){
-  const back = def.management ? "#/mgmt" : "#/";
+  const back = (def.management && manager) ? "#/mgmt" : "#/";
   shell(`<div class="center success">
     <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#E9EEE3"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#4E6140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="big">Submitted</div>
     <p class="sub">${esc(def.title)} saved for ${esc(store.site)}.</p>
     <div class="btn-list" style="max-width:320px;width:100%">
-      <button class="pill" onclick="location.hash='${back}'">Back to ${def.management?'management':'home'}</button>
+      <button class="pill" onclick="location.hash='${back}'">Back to ${(def.management&&manager)?'management':'home'}</button>
       <button class="pill ghost" onclick="location.hash='#/form/${def.type}'">Submit another</button>
     </div></div>`);
 }
@@ -876,10 +954,17 @@ const HUBS=[
       {label:'Milkshakes & Ice Cream', route:'#/doc/icecream'},
     ],
   }},
-  {key:'report', title:'Report / Log', desc:'Accidents & deep cleans', icon:'report', items:[
-    {label:'Accident / Incident', route:'#/form/accident'},
-    {label:'Deep Cleans', route:'#/form/deep_cleans'},
-  ]},
+  {key:'report', title:'Report / Log', desc:'Accidents, cleans & logs', icon:'report', sites:{
+    Brighton:[
+      {label:'Accident / Incident', route:'#/form/accident'},
+      {label:'Deep Cleans', route:'#/form/deep_cleans'},
+    ],
+    Worthing:[
+      {label:'Accident / Incident', route:'#/form/accident'},
+      {label:'Deep Cleans', route:'#/form/deep_cleans'},
+      {label:'Kitchen Logs (every Friday)', route:'#/form/kitchen_logs'},
+    ],
+  }},
   {key:'orders', title:'Orders', desc:'Supplier order lists', icon:'orders', sites:{
     Brighton:[
       {label:'Weekly Orders & Bookers', route:'#/order/order_monday_brighton'},
@@ -915,13 +1000,24 @@ function viewHome(){
     h += `<button class="hub-tile${hub.gold?' gold':''}${hub.wide?' wide':''}" onclick="location.hash='${to}'">
       ${hubIcon(hub.icon)}<div class="hub-txt"><div class="hub-t">${esc(hub.title)}</div><div class="hub-d">${esc(hub.desc)}</div></div></button>`;
   });
-  const mto = manager ? '#/mgmt' : '#/login';
-  const mdesc = manager ? ('Signed in · '+esc(manager.scope==='ALL'?'all stores':manager.scope)) : 'Management only · sign in';
-  h += `<button class="hub-tile wide" onclick="location.hash='${mto}'">
-    ${hubIcon('lock')}<div class="hub-txt"><div class="hub-t">Management</div><div class="hub-d">${mdesc}</div></div></button>`;
+  if(roleAtLeast('supervisor')){
+    h += `<button class="hub-tile wide" onclick="location.hash='#/formcheck'">
+      ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Form Checker <span id="fcBadge" class="fc-badge" style="display:none"></span></div><div class="hub-d">Missed forms & bad temperatures</div></div></button>`;
+    h += `<button class="hub-tile wide" onclick="location.hash='#/safesheet'">
+      ${hubIcon('lock')}<div class="hub-txt"><div class="hub-t">Safe Sheet</div><div class="hub-d">Cash in & out, with a running total</div></div></button>`;
+  }
+  if(roleAtLeast('management')){
+    h += `<button class="hub-tile wide" onclick="location.hash='#/form/four_weekly'">
+      ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">4-Weekly Report</div><div class="hub-d">Monthly food-safety review</div></div></button>`;
+  }
   h += `</div>`;
   h += `<p class="muted" style="text-align:center;font-size:11px;margin-top:22px">Version ${esc(BUILD)}</p>`;
   shell(h);
+  if(roleAtLeast('supervisor')) computeFormCheck(function(issues){
+    const b=$("#fcBadge"); if(!b) return;
+    const n=issues.filter(function(i){ return !i.acked; }).length;
+    if(n>0){ b.textContent=n; b.style.display="inline-block"; } else { b.style.display="none"; }
+  });
 }
 
 function viewHub(key){
@@ -966,11 +1062,53 @@ function viewSitePicker(){
     </div>
   </div></div>`;
 }
-window._setSite=function(s){ store.site=s; location.hash="#/"; router(); };
+window._setSite=function(s){ store.site=s; resetStatusSub(); subscribeRoleData(); location.hash="#/"; router(); };
+
+function viewIdentify(){
+  app.innerHTML = header() + `<div class="content"><div class="center">
+    <div class="picker-logo"><img src="${LOGO}" alt="Laughing Dog" style="height:46px;width:auto"></div>
+    <div class="big">Welcome</div>
+    <p class="sub">Tell us who you are. This saves on this phone so you're only asked once. If anything's ever wrong, a manager can change it for you.</p>
+    <div style="width:100%;max-width:360px;text-align:left;margin-top:6px">
+      <div class="field"><label class="q">Your name</label><input type="text" id="idName" placeholder="First and last name" autocomplete="name"></div>
+      <div class="field"><label class="q">Your position at Laughing Dog</label>
+        <select id="idPos" class="sel">${POSITIONS.map(p=>`<option value="${p[0]}">${p[1]}</option>`).join("")}</select></div>
+      <div id="idErr" class="err"></div>
+      <button class="pill" id="idBtn" style="width:100%">Continue</button>
+      <p class="muted" style="font-size:12px;text-align:center;margin-top:12px">Store: ${esc(store.site||"")} · <span onclick="location.hash='#/settings'" style="text-decoration:underline;cursor:pointer">change</span></p>
+    </div>
+  </div></div>`;
+  $("#idBtn").addEventListener("click", _saveIdentityFromForm);
+  $("#idName").addEventListener("keydown", e=>{ if(e.key==="Enter") _saveIdentityFromForm(); });
+}
+async function _saveIdentityFromForm(){
+  const name=$("#idName").value.trim(); const position=$("#idPos").value; const err=$("#idErr");
+  if(!name){ err.textContent="Please enter your name."; return; }
+  const btn=$("#idBtn"); btn.disabled=true; btn.textContent="Saving…";
+  let staffId=null;
+  if(fbReady){
+    try{
+      const ref=await db.collection("staff").add({ name, position, store:store.site, active:true,
+        createdAtLocal:new Date().toISOString(), createdAt:firebase.firestore.FieldValue.serverTimestamp() });
+      staffId=ref.id;
+    }catch(e){ console.warn("staff add:", e&&e.message); }
+  }
+  me={ staffId, name, position, store:store.site }; saveIdentity(me);
+  watchMyStaffDoc(); subscribeRoleData();
+  go("#/"); router();
+}
 
 function viewSettings(){
   let h = backbar("Home","#/");
   h += `<h1 class="page">Settings</h1>`;
+  if(me){
+    h += `<div class="field"><label class="q">You</label>
+      <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+        <div style="flex:1"><div style="font-weight:600">${esc(me.name)}</div>
+          <div class="muted" style="font-size:13px">${esc(posLabel(me.position))} · ${esc(me.store||store.site||"")}</div></div>
+      </div>
+      <div class="help" style="margin-top:8px">To change your name or position, ask a manager. They can update it in the editor and it'll refresh here automatically.</div></div>`;
+  }
   h += `<div class="field"><label class="q">Current store</label>
     <div class="btn-list">
       <button class="pill ${store.site==='Brighton'?'':'ghost'}" onclick="window._setSite('Brighton')">Brighton</button>
@@ -979,6 +1117,10 @@ function viewSettings(){
   if(manager){
     h += `<div class="sec-title">Management</div><p class="sub">Signed in as ${esc(manager.email)}.</p>
       <button class="pill ghost" onclick="window._logout()">Log out of management</button>`;
+  } else {
+    h += `<div class="sec-title" style="margin-top:26px">Owner</div>
+      <p class="sub">Full records review and the older management portal are behind an owner sign-in. Day-to-day management runs off your position, no sign-in needed.</p>
+      <button class="pill ghost" onclick="location.hash='#/login'">Owner sign-in</button>`;
   }
   shell(h);
 }
@@ -1269,11 +1411,12 @@ const REC_TYPES=[
   ["start_of_day","Start of Day records"],["end_of_day","End of Day records"],
   ["four_weekly","4-Weekly Reviews"],["deep_cleans","Completed Deep Cleans"],
   ["accident","Accident / Incident records"],["staff_training","Staff Training records"],
+  ["kitchen_logs","Kitchen Log photos"],
   ["fat_trap","Fat Trap records"],
 ];
 // Which record types show at each store. Fat Trap is Brighton only.
 function recTypesFor(site){
-  return REC_TYPES.filter(([t])=> t==="fat_trap" ? site==="Brighton" : true);
+  return REC_TYPES.filter(([t])=> t==="fat_trap" ? site==="Brighton" : t==="kitchen_logs" ? site==="Worthing" : true);
 }
 // Food-safety documents, per store. Risk assessments & Electrical are Brighton only.
 // ext links open a PDF that sits next to index.html on the host.
@@ -1329,6 +1472,7 @@ function recSummary(s){
   if(s.formType==="deep_cleans"&&d.deep_cleaned) return "Cleaned: "+d.deep_cleaned;
   if(s.formType==="four_weekly") return d.observed_problem_or_repeat==="Yes"?"Issue noted in review":"Reviewed, no issues";
   if(s.formType==="fat_trap") return d.completed||d.notes||"";
+  if(s.formType==="kitchen_logs") return (d.photos&&d.photos.length? (d.photos.length+" photo"+(d.photos.length>1?"s":"")) : "Logged")+(d.notes?(" · "+d.notes):"");
   if(d.temps&&typeof d.temps==="object"){
     const bad=Object.entries(d.temps).filter(([n,t])=>t&&t.ok===false).map(([n,t])=>`${n} ${t.c}°C`);
     if(bad.length) return "Out of range: "+bad.join(", ");
@@ -1561,13 +1705,14 @@ window._submitOrder=async function(key){
   if(!ordered.length){ if(err) err.textContent="Add a quantity to at least one item before submitting."; window.scrollTo({top:0,behavior:'smooth'}); return; }
   if(err) err.textContent="";
   const items=ordered.map(o=>o.qty+" × "+o.item);
-  const name=($("#ordName")&&$("#ordName").value.trim())||"";
+  const name=(me&&me.name)||($("#ordName")&&$("#ordName").value.trim())||"";
   const email=STORE_EMAIL[store.site]||"";
   const when=new Date().toLocaleString("en-GB",{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   if(fbReady){
     try{ await db.collection("staff_submissions").add({
       formType:"order", formTitle:"Order: "+doc.title, store:store.site,
-      submittedBy:name, data:{list:doc.title, items:items},
+      submittedBy:name, submittedById:(me&&me.staffId)||null, submittedByPos:(me&&me.position)||null,
+      data:{list:doc.title, items:items},
       createdAt:firebase.firestore.FieldValue.serverTimestamp(), createdAtLocal:new Date().toISOString()
     }); }catch(e){ console.error(e); }
   }
@@ -1620,6 +1765,266 @@ function viewDoc(key){
 function viewStub(x){ shell(backbar("Home","#/")+`<h1 class="page">Coming soon</h1><div class="note-box">"${esc(x)}" is being built.</div>`); }
 
 /* =========================================================
+   ROLE FEATURES: Form Checker, Rota, Safe Sheet
+   ========================================================= */
+function localDate(d){ d=d||new Date(); return d.toLocaleDateString("en-CA"); } // YYYY-MM-DD
+function monthKey(d){ d=d||new Date(); return d.toLocaleDateString("en-CA").slice(0,7); } // YYYY-MM
+function monthName(){ return new Date().toLocaleDateString("en-GB",{month:"long",year:"numeric"}); }
+// After a 4-Weekly Report is submitted, mark this month done so the reminder clears.
+async function upsertMonthlyStatus(def, data){
+  if(!fbReady || def.type!=="four_weekly") return;
+  await db.collection("monthly_status").doc(store.site+"__"+monthKey()).set(
+    { store:store.site, month:monthKey(), fourWeekly:{ by:(me&&me.name)||"", at:new Date().toISOString() } }, {merge:true});
+}
+function veryBadTemps(temps){
+  const out=[];
+  if(temps) for(const n in temps){ const t=temps[n]; if(t && typeof t.c==="number" && typeof t.max==="number" && (t.c - t.max) >= 3){ out.push(n+" "+t.c+"°C (limit "+t.max+")"); } }
+  return out;
+}
+// After a Start/End of Day is submitted, record a tiny daily-status summary so the
+// Form Checker can tell at a glance what's done, without scanning every submission.
+async function upsertDailyStatus(def, data, alertUnits){
+  if(!fbReady) return;
+  if(def.type!=="start_of_day" && def.type!=="end_of_day") return;
+  const field = def.type==="start_of_day" ? "sod" : "eod";
+  const key = store.site+"__"+localDate();
+  const entry = { by:(me&&me.name)||"", at:new Date().toISOString(),
+                  alert:(alertUnits&&alertUnits.length>0)||false, bad3:veryBadTemps(data.temps) };
+  await db.collection("daily_status").doc(key).set({ store:store.site, date:localDate(), [field]:entry }, {merge:true});
+}
+// Cutoffs: SoD missed after midday; EoD missed after 5pm weekdays / 6pm weekends.
+function sodMissedNow(){ return new Date().getHours() >= 12; }
+function eodCutoffHour(){ const day=new Date().getDay(); return (day===0||day===6) ? 18 : 17; }
+function eodMissedNow(){ return new Date().getHours() >= eodCutoffHour(); }
+// The scheduled opener/closer come from Square (written by the backend each morning).
+function schedLine(which){
+  const rt=_rotaToday; const label = which==='opener' ? 'Scheduled opening barista' : 'Scheduled closing barista';
+  if(rt===null) return `<div class="fc-rota"><b>${label}</b><span class="muted">Checking…</span></div>`;
+  const p = which==='opener' ? rt.opener : rt.closer;
+  if(p && p.name){ const t=p.start||p.end; return `<div class="fc-rota"><b>${label}</b>${esc(p.name)}${t?(" · from "+esc(t)):""}</div>`; }
+  if(rt.source==='square') return `<div class="fc-rota"><b>${label}</b><span class="muted">No barista scheduled today</span></div>`;
+  return `<div class="fc-rota"><b>${label}</b><span class="muted">Square rota not connected yet</span></div>`;
+}
+var _rotaToday=null, _rotaTodayUnsub=null, _todayStatus=null, _statusUnsub=null, _monthStatus=null, _monthUnsub=null, _acks=null, _acksUnsub=null;
+function subscribeRoleData(){
+  if(!fbReady || !roleAtLeast('supervisor')) return;
+  if(!_rotaTodayUnsub && store.site) _rotaTodayUnsub=db.collection("rota_today").doc(store.site+"__"+localDate()).onSnapshot(function(d){
+    _rotaToday = d.exists ? d.data() : {}; refreshRoleViews();
+  }, function(e){ console.warn("rota_today:",e&&e.message); _rotaToday=_rotaToday||{}; refreshRoleViews(); });
+  if(!_acksUnsub && store.site) _acksUnsub=db.collection("form_check_acks").doc(store.site+"__"+localDate()).onSnapshot(function(d){
+    _acks = d.exists ? d.data() : {}; refreshRoleViews();
+  }, function(e){ console.warn("acks:",e&&e.message); _acks=_acks||{}; refreshRoleViews(); });
+  if(!_statusUnsub && store.site){
+    _statusUnsub=db.collection("daily_status").doc(store.site+"__"+localDate()).onSnapshot(function(d){
+      _todayStatus = d.exists ? d.data() : {}; refreshRoleViews();
+    }, function(e){ console.warn("daily_status:",e&&e.message); _todayStatus=_todayStatus||{}; refreshRoleViews(); });
+  }
+  if(!_monthUnsub && store.site && roleAtLeast('management')){
+    _monthUnsub=db.collection("monthly_status").doc(store.site+"__"+monthKey()).onSnapshot(function(d){
+      _monthStatus = d.exists ? d.data() : {}; refreshRoleViews();
+    }, function(e){ console.warn("monthly_status:",e&&e.message); _monthStatus=_monthStatus||{}; refreshRoleViews(); });
+  }
+}
+function resetStatusSub(){
+  if(_statusUnsub){ try{_statusUnsub()}catch(e){} _statusUnsub=null; } _todayStatus=null;
+  if(_monthUnsub){ try{_monthUnsub()}catch(e){} _monthUnsub=null; } _monthStatus=null;
+  if(_rotaTodayUnsub){ try{_rotaTodayUnsub()}catch(e){} _rotaTodayUnsub=null; } _rotaToday=null;
+  if(_acksUnsub){ try{_acksUnsub()}catch(e){} _acksUnsub=null; } _acks=null;
+  _fcVerifyKey=null;
+}
+// A safe, stable id for each issue so a "checked" acknowledgement can attach to it.
+function ackKey(s){ return String(s).replace(/[^a-zA-Z0-9]/g,"_").slice(0,120); }
+function ackInfo(key){ const a=(_acks&&_acks.acks)||{}; return a[key]||null; }
+function computeFormCheck(cb){
+  const st=_todayStatus||{};
+  const acks=(_acks&&_acks.acks)||{};
+  const issues=[];
+  const sod=st.sod, eod=st.eod;
+  function add(kind, what, key, extra){ const k=ackKey(key); issues.push(Object.assign({kind, what, key:k, acked:!!acks[k], ackable:true}, extra||{})); }
+  if(!sod && sodMissedNow()) add("missed","Start of Day not done","miss_sod",{rota:"opener"});
+  if(!eod && eodMissedNow()) add("missed","End of Day not done","miss_eod",{rota:"closer"});
+  (sod&&sod.bad3||[]).forEach(u=>add("temp","Start of Day: "+u,"temp_sod_"+u));
+  (eod&&eod.bad3||[]).forEach(u=>add("temp","End of Day: "+u,"temp_eod_"+u));
+  if(roleAtLeast('management')){
+    const done = _monthStatus && _monthStatus.fourWeekly;
+    if(!done) issues.push({kind:"monthly", what:"4-Weekly Report due for "+monthName(), key:"monthly", acked:false, ackable:false});
+  }
+  if(cb) cb(issues);
+  return issues;
+}
+// The badge counts only open (un-acknowledged) issues.
+function openIssueCount(){ return computeFormCheck().filter(function(i){ return !i.acked; }).length; }
+window._ackIssue=async function(key){
+  if(!fbReady || !store.site) return;
+  try{ await db.collection("form_check_acks").doc(store.site+"__"+localDate()).set(
+    { store:store.site, date:localDate(), acks:{ [key]:{ by:(me&&me.name)||"", at:new Date().toISOString() } } }, {merge:true}); }
+  catch(e){ console.warn("ack:",e&&e.message); }
+};
+window._unackIssue=async function(key){
+  if(!fbReady || !store.site) return;
+  try{ await db.collection("form_check_acks").doc(store.site+"__"+localDate()).update(
+    { ["acks."+key]: firebase.firestore.FieldValue.delete() }); }
+  catch(e){ console.warn("unack:",e&&e.message); }
+};
+// Fallback: if the daily summary is missing a Start/End of Day, check the real
+// submissions for today so the Form Checker doesn't wrongly say "not done". When it
+// finds one, it backfills the summary so later loads use the fast path.
+let _fcVerifyKey=null;
+async function verifyTodayFromSubmissions(force){
+  if(!fbReady || !store.site) return;
+  const today=localDate(); const key=store.site+"__"+today;
+  if(!force && _fcVerifyKey===key) return;
+  _fcVerifyKey=key;
+  for(const pair of [["start_of_day","sod"],["end_of_day","eod"]]){
+    const ft=pair[0], field=pair[1];
+    if((_todayStatus||{})[field]) continue;
+    try{
+      const snap=await db.collection("staff_submissions").where("store","==",store.site).where("formType","==",ft).get();
+      const mine=snap.docs.map(d=>d.data()).filter(s=>{ try{ return new Date(s.createdAtLocal).toLocaleDateString("en-CA")===today; }catch(e){ return false; } });
+      if(mine.length){
+        mine.sort((a,b)=>String(b.createdAtLocal||"").localeCompare(String(a.createdAtLocal||"")));
+        const s=mine[0];
+        const entry={ by:s.submittedBy||"", at:s.createdAtLocal||"", alert:s.alert||false, bad3:veryBadTemps((s.data&&s.data.temps)||{}) };
+        _todayStatus=Object.assign({store:store.site,date:today}, _todayStatus||{}); _todayStatus[field]=entry;
+        try{ await db.collection("daily_status").doc(key).set({store:store.site,date:today,[field]:entry},{merge:true}); }catch(e){}
+      }
+    }catch(e){ console.warn("verifyToday:",e&&e.message); _fcVerifyKey=null; }
+  }
+  refreshRoleViews();
+}
+function refreshRoleViews(){
+  const h=location.hash||"";
+  if(/^#\/formcheck/.test(h)){ viewFormCheck(); return; }
+  if((h==="#/"||h==="") && roleAtLeast('supervisor')){ const b=$("#fcBadge"); if(b){ const n=openIssueCount(); if(n){ b.textContent=n; b.style.display="inline-block"; } else b.style.display="none"; } }
+}
+function viewFormCheck(){
+  if(!roleAtLeast('supervisor')) return viewHome();
+  subscribeRoleData();
+  verifyTodayFromSubmissions();
+  let h=backbar("Home","#/");
+  h+=`<h1 class="page">Form Checker</h1><p class="sub">${esc(store.site)} · today</p>`;
+  if(!fbReady){ shell(h+`<p class="err">Needs an internet connection.</p>`); return; }
+  if(_todayStatus===null){ shell(h+`<div class="spinner"></div>`); return; }
+  const issues=computeFormCheck();
+  const st=_todayStatus||{};
+  function checkedLine(key){ const a=ackInfo(key); const when=a&&a.at?(" at "+new Date(a.at).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""; return `<div class="fc-rota"><b>Checked</b>by ${esc((a&&a.by)||"a manager")}${when}</div>`; }
+  function ackBtn(key){ return `<button class="pill" style="margin-top:10px" onclick="window._ackIssue('${key}')">Mark as checked</button>`; }
+  function undoBtn(key){ return `<button class="pill ghost" style="margin-top:10px" onclick="window._unackIssue('${key}')">Undo checked</button>`; }
+  // Missed / done cards
+  function statusCard(title, done, missedNow, doneInfo, which, key){
+    const sched=schedLine(which);
+    if(done) return `<div class="fc-card ok"><h3>${esc(title)} · done</h3><div class="muted" style="font-size:13px">By ${esc(doneInfo&&doneInfo.by||"someone")}${doneInfo&&doneInfo.at?(" at "+new Date(doneInfo.at).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""}</div>${sched}</div>`;
+    if(missedNow){
+      const acked=!!ackInfo(key);
+      return `<div class="fc-card ${acked?'':'bad'}"><h3>${acked?'':'⚠️ '}${esc(title)} not done${acked?' · checked':''}</h3><div style="font-size:13px">No one completed it and the cut-off has passed.</div>${sched}${acked?checkedLine(key)+undoBtn(key):ackBtn(key)}</div>`;
+    }
+    return `<div class="fc-card"><h3>${esc(title)} · not yet</h3><div class="muted" style="font-size:13px">Still within time.</div>${sched}</div>`;
+  }
+  h+=statusCard("Start of Day", !!st.sod, !st.sod&&sodMissedNow(), st.sod, 'opener', ackKey('miss_sod'));
+  h+=statusCard("End of Day", !!st.eod, !st.eod&&eodMissedNow(), st.eod, 'closer', ackKey('miss_eod'));
+  // Temp alerts (each can be marked checked individually)
+  const temps=issues.filter(i=>i.kind==="temp");
+  if(temps.length){
+    h+=temps.map(function(t){
+      if(t.acked) return `<div class="fc-card"><h3>${esc(t.what)} · checked</h3>${checkedLine(t.key)}${undoBtn(t.key)}</div>`;
+      return `<div class="fc-card bad"><h3>⚠️ ${esc(t.what)}</h3><div class="muted" style="font-size:12px;margin-top:4px">3°C or more beyond the limit.</div>${ackBtn(t.key)}</div>`;
+    }).join("");
+  } else {
+    h+=`<div class="fc-card ok"><h3>Temperatures OK</h3><div class="muted" style="font-size:13px">Nothing 3°C or more out of range today.</div></div>`;
+  }
+  // 4-Weekly Report (management only)
+  if(roleAtLeast('management')){
+    const done=_monthStatus&&_monthStatus.fourWeekly;
+    if(done){
+      h+=`<div class="fc-card ok"><h3>4-Weekly Report · done</h3><div class="muted" style="font-size:13px">Done for ${esc(monthName())} by ${esc(done.by||"management")}.</div></div>`;
+    } else {
+      h+=`<div class="fc-card bad"><h3>⚠️ 4-Weekly Report due</h3><div style="font-size:13px">The monthly food-safety review for ${esc(monthName())} hasn't been done yet.</div>
+        <button class="pill" style="margin-top:10px" onclick="location.hash='#/form/four_weekly'">Fill it in now</button></div>`;
+    }
+  }
+  shell(h);
+}
+
+/* ---------- SAFE SHEET ---------- */
+let _safeSubs=null,_safeUnsub=null;
+function subscribeSafe(){
+  if(!fbReady){ _safeSubs=_safeSubs||[]; return; }
+  if(_safeUnsub){ try{_safeUnsub()}catch(e){} }
+  _safeSubs=null;
+  _safeUnsub=db.collection("safe_sheet").where("store","==",store.site).onSnapshot(function(snap){
+    _safeSubs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    _safeSubs.sort((a,b)=>tsOf(a)-tsOf(b)); // oldest first for running total
+    if(/^#\/safesheet/.test(location.hash||"")) renderSafe();
+  }, function(e){ console.warn("safe_sheet:",e&&e.message); const b=$("#safeBody"); if(b) b.innerHTML=`<p class="err">Couldn't load: ${esc(e.message)}</p>`; });
+}
+function viewSafeSheet(){
+  if(!roleAtLeast('supervisor')) return viewHome();
+  let h=backbar("Home","#/");
+  h+=`<h1 class="page">Safe Sheet</h1><p class="sub">${esc(store.site)} · running total of the safe</p>`;
+  h+=`<div id="safeBody"><div class="spinner"></div></div>`;
+  shell(h);
+  subscribeSafe();
+  if(_safeSubs) renderSafe();
+}
+function renderSafe(){
+  const body=$("#safeBody"); if(!body) return;
+  if(_safeSubs===null){ return; }
+  const rows=_safeSubs; // oldest first
+  let bal=0; const withBal=rows.map(r=>{ bal += Number(r.amount)||0; return {...r, bal}; });
+  const total=bal;
+  const first = rows.length===0;
+  let h=`<div class="ss-total"><div class="lbl">Current total in safe</div><div class="amt">£${total.toFixed(2)}</div></div>`;
+  // add form
+  if(first){
+    h+=`<div class="fc-card"><h3>Set the opening balance</h3><p class="muted" style="font-size:13px;margin:0 0 10px">This first entry sets the starting amount in the safe. Everything after adds or takes away from it.</p>
+      <div class="field"><label class="q">Opening amount (£)</label><input type="number" step="0.01" inputmode="decimal" id="ssAmt" placeholder="e.g. 200"></div>
+      <div id="ssErr" class="err"></div>
+      <button class="pill" id="ssBtn" style="width:100%">Set opening balance</button></div>`;
+  } else {
+    h+=`<div class="fc-card"><h3>Add an entry</h3>
+      <div class="field"><label class="q">In or out?</label>
+        <select id="ssDir" class="sel"><option value="in">Money IN (add)</option><option value="out">Money OUT (take)</option></select></div>
+      <div class="field"><label class="q">Amount (£)</label><input type="number" step="0.01" inputmode="decimal" id="ssAmt" placeholder="e.g. 50"></div>
+      <div class="field"><label class="q">What for?</label><input type="text" id="ssReason" placeholder="Reason"></div>
+      <div id="ssErr" class="err"></div>
+      <button class="pill" id="ssBtn" style="width:100%">Save entry</button></div>`;
+  }
+  // history newest first
+  h+=`<p class="eyebrow" style="margin-top:22px">History</p>`;
+  if(!rows.length){ h+=`<p class="muted">No entries yet.</p>`; }
+  else {
+    h+=withBal.slice().reverse().map(r=>{
+      const amt=Number(r.amount)||0; const inn=amt>=0;
+      return `<div class="ss-row"><div class="r-main"><div>${esc(r.reason||(inn?"In":"Out"))}</div>
+        <div class="r-bal">${esc(r.submittedBy||"")}${r.createdAtLocal?(" · "+new Date(r.createdAtLocal).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})):""} · balance £${r.bal.toFixed(2)}</div></div>
+        <div class="r-amt ${inn?'in':'out'}">${inn?'+':'−'}£${Math.abs(amt).toFixed(2)}</div></div>`;
+    }).join("");
+  }
+  body.innerHTML=h;
+  const btn=$("#ssBtn"); if(btn) btn.addEventListener("click", ()=>submitSafe(first));
+}
+async function submitSafe(isOpening){
+  const err=$("#ssErr"); err.textContent="";
+  const raw=($("#ssAmt").value||"").trim(); const num=Number(raw);
+  if(raw===""||isNaN(num)){ err.textContent="Enter an amount."; return; }
+  let amount, reason;
+  if(isOpening){ amount=Math.abs(num); reason="Opening balance"; }
+  else{
+    const dir=$("#ssDir").value; reason=($("#ssReason").value||"").trim();
+    if(!reason){ err.textContent="Add a reason."; return; }
+    amount = dir==="out" ? -Math.abs(num) : Math.abs(num);
+  }
+  const btn=$("#ssBtn"); btn.disabled=true; btn.textContent="Saving…";
+  if(!fbReady){ btn.disabled=false; err.textContent="No connection to the database yet."; return; }
+  try{
+    await db.collection("safe_sheet").add({ store:store.site, amount, reason,
+      submittedBy:(me&&me.name)||"", submittedById:(me&&me.staffId)||null,
+      createdAtLocal:new Date().toISOString(), createdAt:firebase.firestore.FieldValue.serverTimestamp() });
+    toast("Saved"); // list refreshes via snapshot
+  }catch(e){ btn.disabled=false; btn.textContent=isOpening?"Set opening balance":"Save entry"; err.textContent="Couldn't save: "+(e.message||e); }
+}
+
+/* =========================================================
    ROUTER
    ========================================================= */
 function router(){
@@ -1630,10 +2035,13 @@ function router(){
   if(hash!=="#/manage" && _subsUnsub){ try{_subsUnsub()}catch(e){} _subsUnsub=null; }
   if(root!=="records" && _recUnsub){ try{_recUnsub()}catch(e){} _recUnsub=null; }
   if(!store.site && hash!=="#/settings"){ return viewSitePicker(); }
+  if(store.site && !me && hash!=="#/settings"){ return viewIdentify(); }
   if(root===""||root===undefined) return viewHome();
   if(root==="settings") return viewSettings();
   if(root==="hub") return viewHub(parts[1]);
   if(root==="eh") return viewEH();
+  if(root==="formcheck") return viewFormCheck();
+  if(root==="safesheet") return viewSafeSheet();
   if(root==="order") return viewOrder(parts[1]);
   if(root==="risk") return viewRisk();
   if(root==="records") return viewRecords(parts[1]);
@@ -1666,6 +2074,9 @@ router();
 try{ clearTimeout(window.__ldBoot); }catch(e){}
 // live content overrides (order lists / docs edited in the editor app)
 try{ subscribeContentDocs(); }catch(e){}
+try{ watchMyStaffDoc(); }catch(e){}
+try{ ensureStaffDoc(); }catch(e){}
+try{ subscribeRoleData(); }catch(e){}
 
 /* first-open "add to home screen" prompt (shown once per device) */
 function maybeShowInstallPrompt(){

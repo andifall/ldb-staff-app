@@ -109,6 +109,11 @@ const $=s=>document.querySelector(s);
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const root=()=>$("#root");
 var user=null, overrides={}, formOv={}, W=null, WF=null, curKey=null, curForm=null, ovUnsub=null, fovUnsub=null, pickStore=null;
+var staffMap={}, stUnsub=null, curStaff=null;
+var rotaMap={}, rtUnsub=null, curRota=false, WR=null;
+const POSITIONS=[["barista","Barista"],["supervisor","Supervisor"],["management","Management"]];
+function posLabel(p){ const f=POSITIONS.find(x=>x[0]===p); return f?f[1]:(p||""); }
+const WEEKDAYS=[["1","Monday"],["2","Tuesday"],["3","Wednesday"],["4","Thursday"],["5","Friday"],["6","Saturday"],["0","Sunday"]];
 
 function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"),2200); }
 
@@ -125,7 +130,7 @@ function renderTop(){
   if(user){ r.innerHTML=`<span class="badge store" style="color:var(--golden);background:transparent;border:1px solid rgba(250,248,243,.4)">${esc(user.scope==='ALL'?'All stores':user.scope)}</span><button class="btn ghost" onclick="window._logout()">Log out</button>`; }
   else { r.innerHTML=""; }
 }
-window._logout=function(){ try{auth.signOut();}catch(e){} curKey=null; W=null; curForm=null; WF=null; };
+window._logout=function(){ try{auth.signOut();}catch(e){} curKey=null; W=null; curForm=null; WF=null; curStaff=null; curRota=false; WR=null; };
 
 function renderLogin(err){
   curKey=null; W=null;
@@ -161,6 +166,14 @@ function startOverrides(){
     const o={}; snap.forEach(d=>o[d.id]=d.data()||{}); formOv=o;
     if(!curKey && !curForm) renderList();
   }, err=>console.warn("form overrides:",err&&err.message));
+  if(!stUnsub) stUnsub=db.collection("staff").onSnapshot(snap=>{
+    const o={}; snap.forEach(d=>o[d.id]={id:d.id,...(d.data()||{})}); staffMap=o;
+    if(!curKey && !curForm && !curStaff && !curRota) renderList();
+  }, err=>console.warn("staff:",err&&err.message));
+  if(!rtUnsub) rtUnsub=db.collection("rota").onSnapshot(snap=>{
+    const o={}; snap.forEach(d=>o[d.id]=d.data()||{}); rotaMap=o;
+    if(!curKey && !curForm && !curStaff && !curRota) renderList();
+  }, err=>console.warn("rota:",err&&err.message));
 }
 
 /* ---------- doc list ---------- */
@@ -211,7 +224,7 @@ function editedLine(edited, iso){
   return `<span class="badge edited">Edited</span>${w?` <span class="muted" style="font-size:11px">${esc(w)}</span>`:""}`;
 }
 function renderList(){
-  curKey=null; W=null; curForm=null; WF=null;
+  curKey=null; W=null; curForm=null; WF=null; curStaff=null; curRota=false; WR=null;
   const st=activeStore();
   let h=`<h1 class="page">Editor</h1><p class="sub">Edit your order lists and daily forms. Saving updates the staff app within seconds.</p>`;
 
@@ -253,9 +266,71 @@ function renderList(){
     </div>`;
   });
 
-  h+=`<p class="hint" style="margin-top:18px">Reference docs, the Staff Handbook and the screen layout are the next things I'll add here.</p>`;
+  // ----- Staff & positions -----
+  h+=`<div class="eyebrow">${esc(st)} staff &amp; positions</div>`;
+  h+=`<p class="hint" style="margin:-4px 0 12px">People appear here after they open the app and enter their name. You can correct anyone's name or change their position, and it updates on their phone automatically.</p>`;
+  const staff=Object.values(staffMap).filter(s=>s.store===st).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  if(!staff.length) h+=`<p class="hint">No one has signed in on ${esc(st)} yet.</p>`;
+  staff.forEach(s=>{
+    const inactive = s.active===false;
+    h+=`<div class="card doc-row"${inactive?' style="opacity:.55"':''}>
+      <div class="meta"><div class="t">${esc(s.name||"(no name)")}</div>
+        <div style="margin-top:7px"><span class="badge ${s.position==='management'?'edited':'default'}" style="background:var(--blush);color:var(--bark70)">${esc(posLabel(s.position))}</span>${inactive?' <span class="badge default">Removed</span>':''}</div></div>
+      <button class="btn gold sm" onclick="window._editStaff('${s.id}')">Edit</button>
+    </div>`;
+  });
+
+  // Rota now comes automatically from Square (opening/closing barista), so there's
+  // nothing to set here.
+
+  h+=`<p class="hint" style="margin-top:18px">The rota comes straight from Square now. Reference docs, the Staff Handbook and the screen layout are the next things I'll add here.</p>`;
   root().innerHTML=h; window.scrollTo(0,0);
 }
+window._editRota=function(){
+  curRota=true; curKey=null; curForm=null; curStaff=null;
+  const st=activeStore();
+  const existing=(rotaMap[st]&&rotaMap[st].days)||{};
+  WR={ store:st, days:{} };
+  WEEKDAYS.forEach(([n])=>{ WR.days[n]=(existing[n]||[]).slice(); });
+  renderRotaEditor();
+};
+function renderRotaEditor(){
+  const st=WR.store;
+  const staff=Object.values(staffMap).filter(s=>s.store===st && s.active!==false).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  let h=`<button class="btn ghost dark sm" onclick="window._backList()">&larr; All</button>
+    <h1 class="page" style="margin-top:12px">${esc(st)} rota</h1>
+    <p class="sub">Tick who normally works each day.</p>`;
+  if(!staff.length){ h+=`<p class="hint">No one has signed in on ${esc(st)} yet, so there's no one to add. People appear here once they've opened the app and entered their name.</p>`; }
+  else {
+    WEEKDAYS.forEach(([n,l])=>{
+      h+=`<div class="sec-card"><div class="field" style="margin:0"><label class="q" style="font-size:15px">${esc(l)}</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">`;
+      staff.forEach(s=>{
+        const on=(WR.days[n]||[]).includes(s.name);
+        h+=`<label style="display:inline-flex;align-items:center;gap:6px;background:${on?'var(--sage-bg)':'#fff'};border:1px solid ${on?'#CFE0C4':'var(--bark15)'};border-radius:999px;padding:7px 12px;font-size:14px;cursor:pointer">
+          <input type="checkbox" data-day="${n}" value="${esc(s.name)}" ${on?'checked':''} onchange="window._toggleRota(this)"> ${esc(s.name)}</label>`;
+      });
+      h+=`</div></div></div>`;
+    });
+  }
+  h+=`<div id="rMsg"></div><div class="bar"><button class="btn block" id="rSave" onclick="window._saveRota()">Save rota</button></div>`;
+  root().innerHTML=h; window.scrollTo(0,0);
+}
+window._toggleRota=function(el){
+  const n=el.getAttribute("data-day"); const v=el.value;
+  WR.days[n]=WR.days[n]||[];
+  if(el.checked){ if(!WR.days[n].includes(v)) WR.days[n].push(v); }
+  else { WR.days[n]=WR.days[n].filter(x=>x!==v); }
+};
+window._saveRota=async function(){
+  const b=$("#rSave"); const m=$("#rMsg"); b.disabled=true; b.textContent="Saving...";
+  try{
+    await db.collection("rota").doc(WR.store).set({ store:WR.store, days:WR.days,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:user.email });
+    toast("Rota saved"); if(m) m.innerHTML=`<div class="msg ok">Saved.</div>`;
+  }catch(e){ if(m) m.innerHTML=`<div class="msg err">Couldn't save: ${esc(e.message||e)}</div>`; }
+  b.disabled=false; b.textContent="Save rota";
+};
 
 /* ---------- editor ---------- */
 function loadWorking(key){
@@ -340,6 +415,43 @@ window._revertLive=async function(){
   if(!confirm("Remove your saved edits and put the original built-in list back for staff? This cannot be undone.")) return;
   try{ await db.collection("content_docs").doc(curKey).delete(); toast("Reverted to original"); W=loadFromDefault(curKey); renderEditor(); }
   catch(e){ $("#edMsg").innerHTML=`<div class="msg err">Couldn't revert: ${esc(e.message||e)}</div>`; }
+};
+
+/* ==================== STAFF & POSITIONS ==================== */
+window._editStaff=function(id){
+  curStaff=id; curKey=null; curForm=null;
+  const s=staffMap[id]; if(!s){ renderList(); return; }
+  let h=`<button class="btn ghost dark sm" onclick="window._backList()">&larr; All</button>
+    <h1 class="page" style="margin-top:12px">Edit person</h1>
+    <p class="sub"><span class="badge store">${esc(s.store||"")}</span></p>
+    <div class="field"><label class="q">Name</label><input type="text" id="stName" value="${esc(s.name||"")}"></div>
+    <div class="field"><label class="q">Position</label>
+      <select id="stPos" style="width:100%;font-family:var(--body);font-size:16px;color:var(--bark);background:#fff;border:1px solid var(--bark15);border-radius:12px;padding:13px 14px;outline:none">
+        ${POSITIONS.map(p=>`<option value="${p[0]}" ${s.position===p[0]?'selected':''}>${p[1]}</option>`).join("")}</select></div>
+    <p class="hint" style="margin:-4px 0 14px">Changing the position updates what this person can see in the app, within a few seconds, without them doing anything.</p>
+    <div id="stMsg"></div>
+    <div class="bar">
+      <button class="btn block" id="stSave" onclick="window._saveStaff()">Save changes</button>
+      <button class="btn ghost dark sm" style="width:100%;margin-top:8px;color:var(--danger);border-color:#E7C7C1" onclick="window._removeStaff()">Remove this person</button>
+    </div>`;
+  root().innerHTML=h; window.scrollTo(0,0);
+};
+window._saveStaff=async function(){
+  const s=staffMap[curStaff]; if(!s) return;
+  const name=($("#stName").value||"").trim(); const position=$("#stPos").value; const m=$("#stMsg");
+  if(!name){ m.innerHTML=`<div class="msg err">Name can't be empty.</div>`; return; }
+  const b=$("#stSave"); b.disabled=true; b.textContent="Saving...";
+  try{
+    await db.collection("staff").doc(curStaff).update({ name, position, active:true,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:user.email });
+    toast("Saved"); m.innerHTML=`<div class="msg ok">Saved. Their app updates shortly.</div>`;
+  }catch(e){ m.innerHTML=`<div class="msg err">Couldn't save: ${esc(e.message||e)}</div>`; }
+  b.disabled=false; b.textContent="Save changes";
+};
+window._removeStaff=async function(){
+  if(!confirm("Remove this person? They'll be asked to enter their name again next time they open the app.")) return;
+  try{ await db.collection("staff").doc(curStaff).delete(); toast("Removed"); curStaff=null; renderList(); }
+  catch(e){ $("#stMsg").innerHTML=`<div class="msg err">Couldn't remove: ${esc(e.message||e)}</div>`; }
 };
 
 /* ==================== DAILY FORM EDITOR ==================== */
