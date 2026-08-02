@@ -101,6 +101,8 @@
   .ss-row .r-amt{font-weight:700;font-family:var(--head)}
   .ss-row .r-amt.in{color:var(--sage-tx)} .ss-row .r-amt.out{color:var(--danger)}
   .ss-row .r-bal{font-size:12px;color:var(--bark55)}
+  label.wchk{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--bark15);border-radius:12px;padding:13px 14px;font-size:14px;cursor:pointer;margin:2px 0}
+  label.wchk input{width:20px;height:20px;flex:none}
   .hub-txt .hub-d{font-size:12.5px;color:var(--bark55);margin-top:2px;line-height:1.35}
   /* list rows (sub pages) */
   .rowlist{display:flex;flex-direction:column;gap:10px}
@@ -289,7 +291,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.01g";
+const BUILD = "2026.08.02a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -954,15 +956,17 @@ const HUBS=[
       {label:'Milkshakes & Ice Cream', route:'#/doc/icecream'},
     ],
   }},
-  {key:'report', title:'Report / Log', desc:'Accidents, cleans & logs', icon:'report', sites:{
+  {key:'report', title:'Report / Log', desc:'Accidents, cleans, wastage', icon:'report', sites:{
     Brighton:[
       {label:'Accident / Incident', route:'#/form/accident'},
       {label:'Deep Cleans', route:'#/form/deep_cleans'},
+      {label:'Wastage Log', route:'#/wastage'},
     ],
     Worthing:[
       {label:'Accident / Incident', route:'#/form/accident'},
       {label:'Deep Cleans', route:'#/form/deep_cleans'},
       {label:'Kitchen Logs (every Friday)', route:'#/form/kitchen_logs'},
+      {label:'Wastage Log', route:'#/wastage'},
     ],
   }},
   {key:'orders', title:'Orders', desc:'Supplier order lists', icon:'orders', sites:{
@@ -1002,7 +1006,7 @@ function viewHome(){
   });
   if(roleAtLeast('supervisor')){
     h += `<button class="hub-tile wide" onclick="location.hash='#/formcheck'">
-      ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Form Checker <span id="fcBadge" class="fc-badge" style="display:none"></span></div><div class="hub-d">Missed forms & bad temperatures</div></div></button>`;
+      ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Management Hub <span id="fcBadge" class="fc-badge" style="display:none"></span></div><div class="hub-d">Checks, temps & wastage</div></div></button>`;
     h += `<button class="hub-tile wide" onclick="location.hash='#/safesheet'">
       ${hubIcon('lock')}<div class="hub-txt"><div class="hub-t">Safe Sheet</div><div class="hub-d">Cash in & out, with a running total</div></div></button>`;
   }
@@ -1824,12 +1828,15 @@ function subscribeRoleData(){
       _monthStatus = d.exists ? d.data() : {}; refreshRoleViews();
     }, function(e){ console.warn("monthly_status:",e&&e.message); _monthStatus=_monthStatus||{}; refreshRoleViews(); });
   }
+  try{ loadHistory(); }catch(e){}
+  try{ loadWastage(); }catch(e){}
 }
 function resetStatusSub(){
   if(_statusUnsub){ try{_statusUnsub()}catch(e){} _statusUnsub=null; } _todayStatus=null;
   if(_monthUnsub){ try{_monthUnsub()}catch(e){} _monthUnsub=null; } _monthStatus=null;
   if(_rotaTodayUnsub){ try{_rotaTodayUnsub()}catch(e){} _rotaTodayUnsub=null; } _rotaToday=null;
   if(_acksUnsub){ try{_acksUnsub()}catch(e){} _acksUnsub=null; } _acks=null;
+  _history=null; _historyKey=null; _wastage=null; _wastageKey=null;
   _fcVerifyKey=null;
 }
 // A safe, stable id for each issue so a "checked" acknowledgement can attach to it.
@@ -1853,19 +1860,72 @@ function computeFormCheck(cb){
   return issues;
 }
 // The badge counts only open (un-acknowledged) issues.
-function openIssueCount(){ return computeFormCheck().filter(function(i){ return !i.acked; }).length; }
-window._ackIssue=async function(key){
-  if(!fbReady || !store.site) return;
-  try{ await db.collection("form_check_acks").doc(store.site+"__"+localDate()).set(
-    { store:store.site, date:localDate(), acks:{ [key]:{ by:(me&&me.name)||"", at:new Date().toISOString() } } }, {merge:true}); }
+// Badge counts today's open issues plus anything still outstanding from earlier days.
+function openIssueCount(){ return computeFormCheck().filter(function(i){ return !i.acked; }).length + ((_history&&_history.length)||0); }
+window._ackIssue=async function(key, date){
+  if(!fbReady || !store.site) return; date=date||localDate();
+  try{ await db.collection("form_check_acks").doc(store.site+"__"+date).set(
+    { store:store.site, date:date, acks:{ [key]:{ by:(me&&me.name)||"", at:new Date().toISOString() } } }, {merge:true});
+    if(date!==localDate()) loadHistory(true); }
   catch(e){ console.warn("ack:",e&&e.message); }
 };
-window._unackIssue=async function(key){
-  if(!fbReady || !store.site) return;
-  try{ await db.collection("form_check_acks").doc(store.site+"__"+localDate()).update(
-    { ["acks."+key]: firebase.firestore.FieldValue.delete() }); }
+window._unackIssue=async function(key, date){
+  if(!fbReady || !store.site) return; date=date||localDate();
+  try{ await db.collection("form_check_acks").doc(store.site+"__"+date).update(
+    { ["acks."+key]: firebase.firestore.FieldValue.delete() });
+    if(date!==localDate()) loadHistory(true); }
   catch(e){ console.warn("unack:",e&&e.message); }
 };
+// ---- Outstanding items from earlier days (until a manager ticks them off) ----
+var _history=null, _historyKey=null;
+async function loadHistory(force){
+  if(!fbReady || !roleAtLeast('supervisor') || !store.site) return;
+  const hk=store.site+"__"+localDate();
+  if(!force && _historyKey===hk && _history!==null) return;
+  _historyKey=hk;
+  const days=[]; const now=new Date();
+  for(let i=1;i<=7;i++){ days.push(new Date(now.getTime()-i*86400000).toLocaleDateString("en-CA")); }
+  const out=[];
+  for(const date of days){
+    try{
+      const id=store.site+"__"+date;
+      const results=await Promise.all([
+        db.collection("daily_status").doc(id).get(),
+        db.collection("rota_today").doc(id).get(),
+        db.collection("form_check_acks").doc(id).get(),
+      ]);
+      const ds=results[0].exists?results[0].data():{};
+      const rt=results[1].exists?results[1].data():{};
+      const ak=(results[2].exists?results[2].data():{}).acks||{};
+      if(rt.opener && !ds.sod){ const k=ackKey("miss_sod"); if(!ak[k]) out.push({date, kind:"missed", what:"Start of Day not done", who:(rt.opener&&rt.opener.name)||"", key:k}); }
+      if(rt.closer && !ds.eod){ const k=ackKey("miss_eod"); if(!ak[k]) out.push({date, kind:"missed", what:"End of Day not done", who:(rt.closer&&rt.closer.name)||"", key:k}); }
+      (ds.sod&&ds.sod.bad3||[]).forEach(function(u){ const k=ackKey("temp_sod_"+u); if(!ak[k]) out.push({date, kind:"temp", what:"Start of Day: "+u, key:k}); });
+      (ds.eod&&ds.eod.bad3||[]).forEach(function(u){ const k=ackKey("temp_eod_"+u); if(!ak[k]) out.push({date, kind:"temp", what:"End of Day: "+u, key:k}); });
+    }catch(e){ console.warn("history:",e&&e.message); }
+  }
+  _history=out; refreshRoleViews();
+}
+function niceDate(d){ try{ return new Date(d+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}); }catch(e){ return d; } }
+// ---- Wastage (weekly report) ----
+var _wastage=null, _wastageKey=null;
+async function loadWastage(force){
+  if(!fbReady || !roleAtLeast('supervisor') || !store.site) return;
+  const wk=store.site+"__"+localDate();
+  if(!force && _wastageKey===wk && _wastage!==null) return;
+  _wastageKey=wk;
+  try{
+    const snap=await db.collection("wastage").where("store","==",store.site).get();
+    _wastage=snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+  }catch(e){ console.warn("wastage load:",e&&e.message); _wastage=_wastage||[]; }
+  refreshRoleViews();
+}
+function weeklyWastage(){
+  if(!_wastage) return null;
+  const cutoff=Date.now()-7*86400000;
+  const recent=_wastage.filter(function(w){ try{ return new Date(w.createdAtLocal).getTime()>=cutoff; }catch(e){ return false; } });
+  recent.sort(function(a,b){ return String(b.createdAtLocal||"").localeCompare(String(a.createdAtLocal||"")); });
+  return { recent, twogood:recent.filter(function(w){return w.twogood;}), total:recent.length };
+}
 // Fallback: if the daily summary is missing a Start/End of Day, check the real
 // submissions for today so the Form Checker doesn't wrongly say "not done". When it
 // finds one, it backfills the summary so later loads use the fast path.
@@ -1902,7 +1962,7 @@ function viewFormCheck(){
   subscribeRoleData();
   verifyTodayFromSubmissions();
   let h=backbar("Home","#/");
-  h+=`<h1 class="page">Form Checker</h1><p class="sub">${esc(store.site)} · today</p>`;
+  h+=`<h1 class="page">Management Hub</h1><p class="sub">${esc(store.site)} · form checker, temp checker, wastage checker</p>`;
   if(!fbReady){ shell(h+`<p class="err">Needs an internet connection.</p>`); return; }
   if(_todayStatus===null){ shell(h+`<div class="spinner"></div>`); return; }
   const issues=computeFormCheck();
@@ -1941,6 +2001,31 @@ function viewFormCheck(){
       h+=`<div class="fc-card bad"><h3>⚠️ 4-Weekly Report due</h3><div style="font-size:13px">The monthly food-safety review for ${esc(monthName())} hasn't been done yet.</div>
         <button class="pill" style="margin-top:10px" onclick="location.hash='#/form/four_weekly'">Fill it in now</button></div>`;
     }
+  }
+  // Earlier days still needing sorting (missed forms / bad temps not yet ticked off)
+  h+=`<div class="sec-title" style="font-size:15px;margin-top:26px">Earlier days · still to sort</div>`;
+  if(_history===null){ h+=`<div class="spinner"></div>`; }
+  else if(!_history.length){ h+=`<p class="muted" style="font-size:13px">Nothing outstanding from the last 7 days. Anything missed and not ticked off would show here.</p>`; }
+  else {
+    h+=_history.map(function(it){
+      const whoLine = it.who ? `<div class="fc-rota"><b>Scheduled</b>${esc(it.who)}</div>` : "";
+      return `<div class="fc-card bad"><h3>⚠️ ${esc(niceDate(it.date))} · ${esc(it.what)}</h3>${whoLine}<button class="pill" style="margin-top:10px" onclick="window._ackIssue('${it.key}','${it.date}')">Mark as checked</button></div>`;
+    }).join("");
+  }
+  // Wastage this week
+  h+=`<div class="sec-title" style="font-size:15px;margin-top:26px">Wastage · last 7 days</div>`;
+  const ww=weeklyWastage();
+  if(ww===null){ h+=`<div class="spinner"></div>`; }
+  else if(!ww.total){ h+=`<div class="fc-card"><h3>No wastage logged</h3><div class="muted" style="font-size:13px">Nothing recorded in the last 7 days.</div></div>`; }
+  else {
+    const binned=ww.total-ww.twogood.length;
+    h+=`<div class="fc-card"><h3>${ww.total} item${ww.total>1?'s':''} wasted</h3>
+      <div style="display:flex;gap:10px;margin:8px 0 4px"><span class="badge yes" style="background:var(--sage-bg);color:var(--sage-tx)">${ww.twogood.length} to Too Good To Go</span><span class="badge" style="background:var(--danger-bg);color:var(--danger)">${binned} binned</span></div>
+      <div style="margin-top:8px">${ww.recent.map(function(w){
+        const tag = w.twogood ? `<span style="color:var(--sage-tx);font-weight:600">2G2G</span>` : `<span style="color:var(--danger);font-weight:600">Bin</span>`;
+        const d=w.createdAtLocal?new Date(w.createdAtLocal).toLocaleDateString("en-GB",{weekday:"short"}):"";
+        return `<div style="font-size:14px;padding:5px 0;border-top:1px solid var(--bark10)">${tag} · ${esc(w.item||"")}${w.qty?(" ("+esc(w.qty)+")"):""}<span class="muted" style="float:right;font-size:12px">${esc(d)}</span></div>`;
+      }).join("")}</div></div>`;
   }
   shell(h);
 }
@@ -2024,6 +2109,69 @@ async function submitSafe(isOpening){
   }catch(e){ btn.disabled=false; btn.textContent=isOpening?"Set opening balance":"Save entry"; err.textContent="Couldn't save: "+(e.message||e); }
 }
 
+/* ---------- WASTAGE LOG (all staff) ---------- */
+let _wasteToday=null, _wasteTodayUnsub=null;
+function viewWastage(){
+  let h=backbar("Report / Log","#/hub/report");
+  h+=`<h1 class="page">Wastage Log</h1><p class="sub">${esc(store.site)} · log anything thrown away or given away</p>`;
+  if(me) h+=`<div class="note-box" style="background:var(--sage-bg);color:var(--sage-tx)">Logging as <b>${esc(me.name)}</b>.</div>`;
+  h+=`<div class="field"><label class="q">What was wasted?<span class="req"> *</span></label><input type="text" id="wItem" placeholder="e.g. croissants, chicken bap"></div>
+    <div class="field"><label class="q">How much? (optional)</label><input type="text" id="wQty" placeholder="e.g. 3, half a tray"></div>
+    <div class="field"><label class="q">Reason (optional)</label><input type="text" id="wReason" placeholder="e.g. out of date, dropped"></div>
+    <label class="wchk"><input type="checkbox" id="wTwoGood"> <span>This was put on Too Good To Go (not binned)</span></label>
+    <div class="field" style="margin-top:14px"><label class="q">Photo (optional)</label><input type="file" id="wPhoto" accept="image/*" capture="environment"></div>
+    <div id="wErr" class="err"></div>
+    <button class="pill cta submit" id="wBtn">Log wastage</button>
+    <div class="sec-title" style="font-size:15px;margin-top:26px">Logged today</div>
+    <div id="wList"><div class="spinner"></div></div>`;
+  shell(h);
+  $("#wBtn").addEventListener("click", submitWastage);
+  subscribeWasteToday();
+}
+function subscribeWasteToday(){
+  if(!fbReady){ const b=$("#wList"); if(b) b.innerHTML=`<p class="muted">Recent entries appear once online.</p>`; return; }
+  if(_wasteTodayUnsub){ try{_wasteTodayUnsub()}catch(e){} }
+  _wasteTodayUnsub=db.collection("wastage").where("store","==",store.site).onSnapshot(function(snap){
+    const today=localDate();
+    const rows=snap.docs.map(function(d){return d.data();})
+      .filter(function(w){ try{ return new Date(w.createdAtLocal).toLocaleDateString("en-CA")===today; }catch(e){ return false; } })
+      .sort(function(a,b){ return String(b.createdAtLocal||"").localeCompare(String(a.createdAtLocal||"")); });
+    const b=$("#wList"); if(!b) return;
+    if(!rows.length){ b.innerHTML=`<p class="muted" style="font-size:13px">Nothing logged yet today.</p>`; return; }
+    b.innerHTML=rows.map(function(w){
+      const tag=w.twogood?`<span style="color:var(--sage-tx);font-weight:600">Too Good To Go</span>`:`<span style="color:var(--danger);font-weight:600">Binned</span>`;
+      return `<div class="ss-row"><div class="r-main"><div>${esc(w.item||"")}${w.qty?(" · "+esc(w.qty)):""}</div><div class="r-bal">${tag}${w.submittedBy?(" · "+esc(w.submittedBy)):""}</div></div></div>`;
+    }).join("");
+  }, function(e){ const b=$("#wList"); if(b) b.innerHTML=`<p class="err">Couldn't load: ${esc(e.message)}</p>`; });
+}
+async function submitWastage(){
+  const err=$("#wErr"); err.textContent="";
+  const item=($("#wItem").value||"").trim();
+  if(!item){ err.textContent="Say what was wasted."; return; }
+  const qty=($("#wQty").value||"").trim();
+  const reason=($("#wReason").value||"").trim();
+  const twogood=!!($("#wTwoGood").checked);
+  const btn=$("#wBtn"); btn.disabled=true; btn.textContent="Logging…";
+  if(!fbReady){ btn.disabled=false; btn.textContent="Log wastage"; err.textContent="No connection to the database yet."; return; }
+  let photos=[];
+  const pf=$("#wPhoto");
+  if(pf && pf.files && pf.files.length){
+    for(const file of Array.from(pf.files).slice(0,2)){ if(!file.type.startsWith("image/"))continue; try{ photos.push(await resizeImage(file,1000,0.6)); }catch(e){} }
+  }
+  try{
+    const rec={ store:store.site, item, qty, reason, twogood,
+      submittedBy:(me&&me.name)||"", submittedById:(me&&me.staffId)||null,
+      createdAtLocal:new Date().toISOString(), createdAt:firebase.firestore.FieldValue.serverTimestamp() };
+    if(photos.length) rec.photos=photos;
+    await db.collection("wastage").add(rec);
+    _wastageKey=null; // force the weekly report to refresh next time it's viewed
+    toast("Wastage logged");
+    // reset form
+    $("#wItem").value=""; $("#wQty").value=""; $("#wReason").value=""; $("#wTwoGood").checked=false; if(pf) pf.value="";
+    btn.disabled=false; btn.textContent="Log wastage";
+  }catch(e){ btn.disabled=false; btn.textContent="Log wastage"; err.textContent="Couldn't save: "+(e.message||e); }
+}
+
 /* =========================================================
    ROUTER
    ========================================================= */
@@ -2034,6 +2182,7 @@ function router(){
   if(root!=="allergens") clearAllergenSubs();
   if(hash!=="#/manage" && _subsUnsub){ try{_subsUnsub()}catch(e){} _subsUnsub=null; }
   if(root!=="records" && _recUnsub){ try{_recUnsub()}catch(e){} _recUnsub=null; }
+  if(root!=="wastage" && _wasteTodayUnsub){ try{_wasteTodayUnsub()}catch(e){} _wasteTodayUnsub=null; }
   if(!store.site && hash!=="#/settings"){ return viewSitePicker(); }
   if(store.site && !me && hash!=="#/settings"){ return viewIdentify(); }
   if(root===""||root===undefined) return viewHome();
@@ -2042,6 +2191,7 @@ function router(){
   if(root==="eh") return viewEH();
   if(root==="formcheck") return viewFormCheck();
   if(root==="safesheet") return viewSafeSheet();
+  if(root==="wastage") return viewWastage();
   if(root==="order") return viewOrder(parts[1]);
   if(root==="risk") return viewRisk();
   if(root==="records") return viewRecords(parts[1]);
