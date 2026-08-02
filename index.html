@@ -291,7 +291,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.02a";
+const BUILD = "2026.08.02b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2115,6 +2115,7 @@ function viewWastage(){
   let h=backbar("Report / Log","#/hub/report");
   h+=`<h1 class="page">Wastage Log</h1><p class="sub">${esc(store.site)} · log anything thrown away or given away</p>`;
   if(me) h+=`<div class="note-box" style="background:var(--sage-bg);color:var(--sage-tx)">Logging as <b>${esc(me.name)}</b>.</div>`;
+  h+=`<div class="note-box" style="background:#FFF3DC;color:#6B4A17;border:1px solid #FFBE5C"><b>Before you bin a cake or cookie:</b> if it is a cake going out of date, please check the quality and extend the time if it is still of good quality. Use your discretion. Do not throw things out automatically based on cake best-before dates.</div>`;
   h+=`<div class="field"><label class="q">What was wasted?<span class="req"> *</span></label><input type="text" id="wItem" placeholder="e.g. croissants, chicken bap"></div>
     <div class="field"><label class="q">How much? (optional)</label><input type="text" id="wQty" placeholder="e.g. 3, half a tray"></div>
     <div class="field"><label class="q">Reason (optional)</label><input type="text" id="wReason" placeholder="e.g. out of date, dropped"></div>
