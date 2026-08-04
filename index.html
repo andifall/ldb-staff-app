@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04c";
+const BUILD = "2026.08.04d";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1658,10 +1658,13 @@ var _docOverrides={};
 function getDoc(key){
   const o=_docOverrides[key];
   if(o && !o.hidden){
-    return { title:o.title||"", sub:o.sub||"", sections:(o.sections||[]).map(s=>({h:s.h||"",b:s.b||""})) };
+    return { title:o.title||"", sub:o.sub||"", sections:(o.sections||[]).map(s=>({h:s.h||"",b:s.b||"",emailNote:!!s.emailNote})) };
   }
   return REFDOCS[key]||null;
 }
+// Sections the owner has flagged to appear in the ORDER EMAIL only (e.g. a
+// sign-off to the supplier). They are not shown as orderable items in the app.
+function emailNotesFor(doc){ return (doc.sections||[]).filter(s=>s.emailNote && (s.b||"").trim()).map(s=>({h:s.h||"",b:s.b||""})); }
 /* Live-editable forms: the daily forms (start/end of day, prep) can be overridden
    from `content_forms`. The override carries the whole form shape (title, intro and
    the per-store field arrays), merged over the built-in so anything not edited, and
@@ -1727,7 +1730,7 @@ function isOrderNote(h, line){
   return /^(minimum order|email |click & collect|pay out|orders@|email order)/i.test(line) || line.includes("@");
 }
 function orderSections(doc){
-  return doc.sections.map(s=>{
+  return doc.sections.filter(s=>!s.emailNote).map(s=>{
     const notes=[], items=[];
     s.b.split("\n").forEach(line=>{ const l=line.trim(); if(!l) return; if(isOrderNote(s.h,l)) notes.push(l); else items.push(l); });
     return {h:s.h, notes, items};
@@ -1779,10 +1782,11 @@ function viewOrder(key){
     sec.items.forEach(it=>{
       const parsed=splitOrderItem(it);
       const idx=_orderItems.length; _orderItems.push({label:parsed.show, show:parsed.show, send:parsed.send, section:sec.h});
-      h+=`<label class="ord-row"><span class="ord-name">${esc(parsed.show)}</span><input type="text" class="ord-qty" data-idx="${idx}" placeholder="e.g. 2, or 2 boxes"></label>`;
+      h+=`<label class="ord-row"><span class="ord-name">${esc(parsed.show)}</span><input type="text" inputmode="numeric" class="ord-qty" data-idx="${idx}" placeholder="e.g. 2"></label>`;
     });
   });
-  h+=`<div class="field" style="margin-top:16px"><label class="q">Your name (optional)</label><input type="text" id="ordName" placeholder="Who is placing this order?"></div>`;
+  if(me) h+=`<div class="note-box" style="background:var(--sage-bg);color:var(--sage-tx);margin-top:16px">Placing this order as <b>${esc(me.name)}</b>.</div>`;
+  else h+=`<div class="field" style="margin-top:16px"><label class="q">Your name (optional)</label><input type="text" id="ordName" placeholder="Who is placing this order?"></div>`;
   h+=`<div id="ordErr" class="err" style="margin:8px 0"></div>`;
   h+=`<button class="pill" id="ordSubmit" onclick="window._submitOrder('${key}')">Submit order</button>`;
   shell(h);
@@ -1843,6 +1847,14 @@ window._submitOrder=async function(key){
           +`</div>`).join("")
       +`</div>`;
   }
+  // Owner "email note" sections (e.g. a sign-off to the supplier), appended to
+  // the bottom of the email only.
+  const emNotes=emailNotesFor(doc);
+  if(emNotes.length){
+    textBody+="\n"+emNotes.map(n=>(n.h?n.h+"\n":"")+n.b).join("\n\n")+"\n";
+    const notesHtml=emNotes.map(n=>`<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e5ddd2;color:#5a4a3c;font-size:13px;line-height:1.55;white-space:pre-wrap">${n.h?`<div style="font-weight:700;margin-bottom:4px">${esc(n.h)}</div>`:""}${esc(n.b)}</div>`).join("");
+    htmlBody=htmlBody.replace(/<\/div>\s*$/, "")+notesHtml+`</div>`;
+  }
   // queue the order email in Firebase (Trigger Email extension sends it to the store inbox)
   let emailed=false;
   if(fbReady){
@@ -1889,7 +1901,7 @@ function viewEditDoc(key){
   _ownerDoc={ key, title:(cur&&cur.title)||"", sub:(cur&&cur.sub)||"",
     supplierMode: docSupplierMode(key),
     isOrder: /^order_/.test(key),
-    sections:((cur&&cur.sections)||[]).map(s=>({h:s.h||"",b:s.b||""})) };
+    sections:((cur&&cur.sections)||[]).map(s=>({h:s.h||"",b:s.b||"",emailNote:!!s.emailNote})) };
   if(!_ownerDoc.sections.length) _ownerDoc.sections.push({h:"",b:""});
   renderEditDoc();
 }
@@ -1908,9 +1920,11 @@ function renderEditDoc(){
     h+=`<p class="help" style="margin:0 0 12px">To make the <b>email to the supplier</b> read differently from what staff see, add <b>=&gt;</b> and the supplier wording. Example: <b>Rocket - 3 bags =&gt; bag of rocket</b>. Staff still see "Rocket - 3 bags"; if they order 1, the supplier gets "1 bag of rocket". Items with no <b>=&gt;</b> just drop the "- 3 bags" part in the email.</p>`;
   }
   d.sections.forEach((s,i)=>{
+    const isNote=!!s.emailNote;
     h+=`<div class="own-sec" data-osec="${i}">
       <div class="field" style="margin:0 0 8px"><label class="q">Section heading</label><input type="text" class="od_h" value="${esc(s.h)}"></div>
-      <div class="field" style="margin:0"><label class="q">Items (one per line)</label><textarea class="od_b" rows="7">${esc(s.b)}</textarea></div>
+      <div class="field" style="margin:0"><label class="q">${isNote?'Text to add at the bottom of the email':'Items (one per line)'}</label><textarea class="od_b" rows="7">${esc(s.b)}</textarea></div>
+      ${d.isOrder?`<label class="wchk" style="margin:10px 0 0"><input type="checkbox" class="od_emailnote" ${isNote?'checked':''}> <span>Add this to the <b>email only</b> (a sign-off or note to the supplier). It won't show as items in the app.</span></label>`:``}
       <div class="own-tools">
         <button onclick="window._odMoveSec(${i},-1)" ${i===0?'disabled':''}>↑ Up</button>
         <button onclick="window._odMoveSec(${i},1)" ${i===d.sections.length-1?'disabled':''}>↓ Down</button>
@@ -1932,6 +1946,7 @@ function renderEditDoc(){
 window._odPreview=function(){
   _odSync(); const d=_ownerDoc; const rows=[];
   d.sections.forEach(sec=>{
+    if(sec.emailNote) return;
     String(sec.b||"").split("\n").forEach(line=>{
       const l=line.trim(); if(!l) return; if(isOrderNote(sec.h,l)) return;
       const p=splitOrderItem(l); rows.push({ show:p.show, send:p.send||cleanItemName(p.show) });
@@ -1953,6 +1968,7 @@ function _odSync(){
     const i=+card.getAttribute("data-osec"); const sec=_ownerDoc.sections[i]; if(!sec) return;
     const hh=card.querySelector(".od_h"); if(hh) sec.h=hh.value;
     const bb=card.querySelector(".od_b"); if(bb) sec.b=bb.value.replace(/\r\n/g,"\n");
+    const en=card.querySelector(".od_emailnote"); if(en) sec.emailNote=en.checked;
   });
 }
 window._odAddSec=function(){ _odSync(); _ownerDoc.sections.push({h:"New section",b:""}); renderEditDoc(); };
@@ -1965,7 +1981,7 @@ window._odSave=async function(){
   const btn=document.getElementById("odSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
   const payload={ key:d.key, title:d.title.trim(), sub:(d.sub||"").trim(),
     store:docStoreFor(d.key), kind:'doc', supplierMode:!!d.supplierMode,
-    sections:d.sections.filter(s=>(s.h&&s.h.trim())||(s.b&&s.b.trim())).map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,"")})),
+    sections:d.sections.filter(s=>(s.h&&s.h.trim())||(s.b&&s.b.trim())).map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,""), emailNote:!!s.emailNote})),
     savedAt:new Date().toISOString(), updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:(me&&me.name)||'Owner' };
   try{ await db.collection("content_docs").doc(d.key).set(payload); ownerMsg("odMsg","ok","Saved. Everyone's app now shows this version."); }
   catch(e){ ownerMsg("odMsg","err","Couldn't save: "+(e.message||e)); }
