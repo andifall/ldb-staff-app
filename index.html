@@ -103,6 +103,34 @@
   .ss-row .r-bal{font-size:12px;color:var(--bark55)}
   label.wchk{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--bark15);border-radius:12px;padding:13px 14px;font-size:14px;cursor:pointer;margin:2px 0}
   label.wchk input{width:20px;height:20px;flex:none}
+  /* owner editing */
+  .own-edit-row{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 12px}
+  .own-edit-btn{appearance:none;border:1px dashed var(--golden);background:#FFF7E9;color:var(--bark);
+    border-radius:11px;padding:9px 13px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .own-edit-btn:hover{background:#FFEFCF}
+  .own-sec{background:#fff;border:1px solid var(--bark15);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .own-tools{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .own-tools button{appearance:none;border:1px solid var(--bark15);background:var(--cream);color:var(--bark);
+    border-radius:9px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .own-tools button[disabled]{opacity:.4;cursor:default}
+  .own-tools button.del{color:var(--danger);border-color:#E7C7C1}
+  .own-badge{display:inline-block;background:var(--blush);color:var(--bark70);border-radius:20px;
+    padding:3px 11px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .own-add{appearance:none;width:100%;border:1px dashed var(--bark40);background:#fff;color:var(--bark);
+    border-radius:12px;padding:12px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;margin:2px 0 6px}
+  .own-add:hover{background:var(--blush)}
+  .own-bar{display:flex;flex-direction:column;gap:8px;margin-top:18px}
+  .own-ghost{appearance:none;border:1px solid var(--bark15);background:#fff;color:var(--bark);
+    border-radius:12px;padding:11px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+  .own-danger{appearance:none;border:1px solid #E7C7C1;background:#fff;color:var(--danger);
+    border-radius:12px;padding:11px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+  .own-emailrow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .own-emailrow input{flex:1}
+  .own-emailrow .del{appearance:none;border:1px solid #E7C7C1;background:#fff;color:var(--danger);
+    border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;flex:none}
+  .own-msg{border-radius:11px;padding:11px 13px;font-size:13.5px;font-weight:600;margin:12px 0 4px}
+  .own-msg.ok{background:var(--sage-bg);color:var(--sage-tx)}
+  .own-msg.err{background:var(--danger-bg);color:var(--danger)}
   .hub-txt .hub-d{font-size:12.5px;color:var(--bark55);margin-top:2px;line-height:1.35}
   /* list rows (sub pages) */
   .rowlist{display:flex;flex-direction:column;gap:10px}
@@ -291,7 +319,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.02b";
+const BUILD = "2026.08.04a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -306,6 +334,20 @@ function roleAtLeast(r){ return !!me && roleRank(me.position) >= roleRank(r); }
 function loadIdentity(){ try{ const s=localStorage.getItem("ld_identity"); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveIdentity(o){ try{ localStorage.setItem("ld_identity", JSON.stringify(o)); }catch(e){} }
 var me = loadIdentity();   // {staffId, name, position, store}
+
+/* ---------- Owner mode (Simon only) ----------
+   Owner unlocks in-app editing of order lists, forms, reference docs and the
+   addresses each order emails to. Per Simon's choice it is tied to the staff
+   identity name (no separate sign-in). Extend OWNER_NAMES if ever needed. */
+var OWNER_NAMES = ["simon dean"];
+function isOwner(){
+  try{
+    if(manager && manager.email==='simon@ldbrighton.com') return true;
+    if(me && me.position==='owner') return true;
+    if(me && me.name && OWNER_NAMES.indexOf(String(me.name).trim().toLowerCase())>=0) return true;
+  }catch(e){}
+  return false;
+}
 let staffDocUnsub=null;
 function watchMyStaffDoc(){
   if(!fbReady || !me || !me.staffId || staffDocUnsub) return;
@@ -830,6 +872,7 @@ function viewForm(formType){
   const back = (def.management && manager) ? "#/mgmt" : "#/";
   let html = backbar((def.management && manager)?"Management":"Home", back);
   html += `<h1 class="page">${esc(def.title)}</h1><p class="sub">${esc(site||"")}</p>`;
+  if(isOwner() && FORMS[formType]) html += `<div class="own-edit-row"><button class="own-edit-btn" onclick="window._nav('#/edit/form/${encodeURIComponent(formType)}')">✎ Edit this form (${esc(site||"")})</button></div>`;
   if(def.unverified) html += `<div class="note-box">⚠️ ${esc(def.intro)}</div>`;
   else if(def.intro) html += `<div class="note-box">${esc(def.intro)}</div>`;
   html += `<form id="theform" onsubmit="return false">`;
@@ -1619,6 +1662,19 @@ function getDoc(key){
    the per-store field arrays), merged over the built-in so anything not edited, and
    any form never edited, still uses the built-in version. */
 let _formOverrides={};
+/* Per-list, per-store email recipients for orders (owner-editable in-app).
+   Keyed order_recipients/{store}__{listKey} = {store,list,key,emails:[...]}. */
+var _recipients={};
+function recipKey(key){ return store.site+"__"+key; }
+function orderRecipients(key){
+  const r=_recipients[recipKey(key)];
+  const list=(r && Array.isArray(r.emails)) ? r.emails.map(e=>String(e||"").trim()).filter(Boolean) : [];
+  return list;
+}
+function orderRecipientsResolved(key){
+  const list=orderRecipients(key);
+  return list.length ? list : [STORE_EMAIL[store.site]].filter(Boolean);
+}
 function getForm(type){
   const base=FORMS[type]; const o=_formOverrides[type];
   if(o && !o.hidden) return Object.assign({}, base||{}, o);
@@ -1636,13 +1692,22 @@ function subscribeContentDocs(){
     const o={}; snap.forEach(d=>{ const x=d.data()||{}; o[d.id]=x; });
     _formOverrides=o;
     const h=location.hash||"";
-    if(/^#\/form\//.test(h)) router();
+    if(/^#\/(form|edit)\//.test(h)) router();
   }, err=>{ console.warn("content_forms:", err && err.message); });
+  db.collection("order_recipients").onSnapshot(snap=>{
+    const o={}; snap.forEach(d=>{ o[d.id]=d.data()||{}; });
+    _recipients=o;
+    const h=location.hash||"";
+    if(/^#\/(order|edit)\//.test(h)) router();
+  }, err=>{ console.warn("order_recipients:", err && err.message); });
 }
 window._toggleSec=function(el){ el.closest(".acc-item").classList.toggle("open"); };
-function viewRefDoc(doc){
+function viewRefDoc(doc, key){
   let h=backbar("Home","#/");
   h+=`<h1 class="page">${esc(doc.title)}</h1><p class="sub">${esc(doc.sub||"")} · ${esc(store.site)}</p>`;
+  if(isOwner() && key){
+    h+=`<div class="own-edit-row"><button class="own-edit-btn" onclick="window._nav('#/edit/doc/${encodeURIComponent(key)}')">✎ Edit this document</button></div>`;
+  }
   h+=doc.sections.map((s,i)=>`<div class="acc-item${i===0?' open':''}">
     <button class="acc-h" onclick="window._toggleSec(this)"><span>${esc(s.h)}</span><span class="caret">›</span></button>
     <div class="acc-b">${esc(s.b)}</div></div>`).join("");
@@ -1684,10 +1749,17 @@ let _orderItems=[];
 function viewOrder(key){
   const doc=getDoc(key); if(!doc) return viewHome();
   _orderItems=[];
-  const email=STORE_EMAIL[store.site]||"";
+  const toList=orderRecipientsResolved(key);
+  const email=toList.join(", ");
   let h=backbar("Orders","#/hub/orders");
   h+=`<h1 class="page">${esc(doc.title)}</h1><p class="sub">${esc(doc.sub||"")} · ${esc(store.site)}</p>`;
-  h+=`<div class="note-box">Put the number you need next to each item, then Submit. The order emails straight to ${esc(email)} and is saved for management.</div>`;
+  if(isOwner()){
+    h+=`<div class="own-edit-row">
+      <button class="own-edit-btn" onclick="window._nav('#/edit/doc/${encodeURIComponent(key)}')">✎ Edit this list</button>
+      <button class="own-edit-btn" onclick="window._nav('#/edit/emails/${encodeURIComponent(key)}')">✉ Who this emails (${toList.length})</button>
+    </div>`;
+  }
+  h+=`<div class="note-box">Put the number you need next to each item, then Submit. The order emails to ${esc(email)} and is saved for management.</div>`;
   orderSections(doc).forEach(sec=>{
     h+=`<div class="ord-h">${esc(sec.h)}</div>`;
     sec.notes.forEach(n=> h+=`<div class="ord-note">${esc(n)}</div>`);
@@ -1710,7 +1782,8 @@ window._submitOrder=async function(key){
   if(err) err.textContent="";
   const items=ordered.map(o=>o.qty+" × "+o.item);
   const name=(me&&me.name)||($("#ordName")&&$("#ordName").value.trim())||"";
-  const email=STORE_EMAIL[store.site]||"";
+  const toList=orderRecipientsResolved(key);
+  const email=toList.join(", ");
   const when=new Date().toLocaleString("en-GB",{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   if(fbReady){
     try{ await db.collection("staff_submissions").add({
@@ -1746,7 +1819,7 @@ window._submitOrder=async function(key){
   let emailed=false;
   if(fbReady){
     try{
-      await db.collection("mail").add({ to:email, message:{ subject:subject, text:textBody, html:htmlBody } });
+      await db.collection("mail").add({ to:toList, store:store.site, message:{ subject:subject, text:textBody, html:htmlBody } });
       emailed=true;
     }catch(e){ console.error(e); }
   }
@@ -1760,13 +1833,271 @@ window._submitOrder=async function(key){
     <button class="pill" onclick="location.hash='#/hub/orders'">Back to Orders</button></div>`);
 };
 function viewDoc(key){
-  const gd=getDoc(key); if(gd) return viewRefDoc(gd);
+  const gd=getDoc(key); if(gd) return viewRefDoc(gd, key);
   const d=DOCS[key]||{t:"Coming soon",n:"This section is being built."};
   shell(backbar("Home","#/")+`<h1 class="page">${esc(d.t)}</h1>
     <div class="note-box">${esc(d.n)}</div>
     <p class="muted" style="font-size:14px">This button exists in your current app. I've wired it up in the new app - the content just needs bringing across, which we'll do once Simon confirms where it lives.</p>`);
 }
 function viewStub(x){ shell(backbar("Home","#/")+`<h1 class="page">Coming soon</h1><div class="note-box">"${esc(x)}" is being built.</div>`); }
+
+/* =========================================================
+   OWNER EDITING (Simon only) — edit order lists, reference
+   docs, daily forms and order email recipients from inside
+   the app. Writes the SAME Firestore shapes as the separate
+   editor app, so both stay compatible. Everyone's app updates.
+   ========================================================= */
+window._navBack=function(){ try{ if(history.length>1){ history.back(); return; } }catch(e){} go('#/'); };
+function docStoreFor(key){ if(/worthing/i.test(key)) return 'Worthing'; if(/brighton/i.test(key)) return 'Brighton'; return 'both'; }
+function ownerMsg(id,cls,txt){ const m=document.getElementById(id); if(m) m.innerHTML=`<div class="own-msg ${cls}">${esc(txt)}</div>`; }
+
+/* ---- Order list / reference doc editor (content_docs) ---- */
+var _ownerDoc=null;
+function viewEditDoc(key){
+  const cur=getDoc(key);
+  _ownerDoc={ key, title:(cur&&cur.title)||"", sub:(cur&&cur.sub)||"",
+    sections:((cur&&cur.sections)||[]).map(s=>({h:s.h||"",b:s.b||""})) };
+  if(!_ownerDoc.sections.length) _ownerDoc.sections.push({h:"",b:""});
+  renderEditDoc();
+}
+function renderEditDoc(){
+  const d=_ownerDoc; const edited=!!(_docOverrides[d.key]);
+  let h=`<div class="backbar"><button class="back" onclick="window._navBack()">‹ Back</button></div>`;
+  h+=`<h1 class="page">Edit list</h1><p class="sub">Changes go live for everyone as soon as you save.${edited?` · <b>edited</b>`:``}</p>`;
+  h+=`<div class="field"><label class="q">List name</label><input type="text" id="od_title" value="${esc(d.title)}"></div>`;
+  h+=`<div class="field"><label class="q">Small line under the name (optional)</label><input type="text" id="od_sub" value="${esc(d.sub)}"></div>`;
+  h+=`<div class="sec-title" style="font-size:15px;margin:18px 0 8px">Sections</div>`;
+  h+=`<p class="help" style="margin:-2px 0 12px">Each section has a heading and its items. Put one item per line, for example <b>Feta 200g - 4</b>. The number after the dash is the standing quantity.</p>`;
+  d.sections.forEach((s,i)=>{
+    h+=`<div class="own-sec" data-osec="${i}">
+      <div class="field" style="margin:0 0 8px"><label class="q">Section heading</label><input type="text" class="od_h" value="${esc(s.h)}"></div>
+      <div class="field" style="margin:0"><label class="q">Items (one per line)</label><textarea class="od_b" rows="7">${esc(s.b)}</textarea></div>
+      <div class="own-tools">
+        <button onclick="window._odMoveSec(${i},-1)" ${i===0?'disabled':''}>↑ Up</button>
+        <button onclick="window._odMoveSec(${i},1)" ${i===d.sections.length-1?'disabled':''}>↓ Down</button>
+        <button class="del" onclick="window._odDelSec(${i})">Delete section</button>
+      </div></div>`;
+  });
+  h+=`<button class="own-add" onclick="window._odAddSec()">+ Add a section</button>`;
+  h+=`<div id="odMsg"></div>`;
+  h+=`<div class="own-bar">
+    <button class="pill cta submit" id="odSave" onclick="window._odSave()">Save &amp; publish to everyone</button>
+    ${edited?`<button class="own-danger" onclick="window._odRevert()">Undo my edits (back to original)</button>`:``}
+  </div>`;
+  shell(h);
+}
+function _odSync(){
+  if(!_ownerDoc) return;
+  const t=document.getElementById("od_title"); if(t) _ownerDoc.title=t.value;
+  const s=document.getElementById("od_sub"); if(s) _ownerDoc.sub=s.value;
+  document.querySelectorAll("[data-osec]").forEach(card=>{
+    const i=+card.getAttribute("data-osec"); const sec=_ownerDoc.sections[i]; if(!sec) return;
+    const hh=card.querySelector(".od_h"); if(hh) sec.h=hh.value;
+    const bb=card.querySelector(".od_b"); if(bb) sec.b=bb.value.replace(/\r\n/g,"\n");
+  });
+}
+window._odAddSec=function(){ _odSync(); _ownerDoc.sections.push({h:"New section",b:""}); renderEditDoc(); };
+window._odMoveSec=function(i,dir){ _odSync(); const j=i+dir; if(j<0||j>=_ownerDoc.sections.length) return; const t=_ownerDoc.sections[i]; _ownerDoc.sections[i]=_ownerDoc.sections[j]; _ownerDoc.sections[j]=t; renderEditDoc(); };
+window._odDelSec=function(i){ _odSync(); if(!confirm("Delete this whole section?")) return; _ownerDoc.sections.splice(i,1); if(!_ownerDoc.sections.length) _ownerDoc.sections.push({h:"",b:""}); renderEditDoc(); };
+window._odSave=async function(){
+  _odSync(); const d=_ownerDoc;
+  if(!(d.title||"").trim()){ ownerMsg("odMsg","err","Give the list a name first."); return; }
+  if(!fbReady){ ownerMsg("odMsg","err","No connection yet — try again once the app is online."); return; }
+  const btn=document.getElementById("odSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  const payload={ key:d.key, title:d.title.trim(), sub:(d.sub||"").trim(),
+    store:docStoreFor(d.key), kind:'doc',
+    sections:d.sections.filter(s=>(s.h&&s.h.trim())||(s.b&&s.b.trim())).map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,"")})),
+    savedAt:new Date().toISOString(), updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:(me&&me.name)||'Owner' };
+  try{ await db.collection("content_docs").doc(d.key).set(payload); ownerMsg("odMsg","ok","Saved. Everyone's app now shows this version."); }
+  catch(e){ ownerMsg("odMsg","err","Couldn't save: "+(e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent="Save & publish to everyone"; }
+};
+window._odRevert=async function(){
+  if(!confirm("Remove your edits and put the original built-in list back for everyone? This cannot be undone.")) return;
+  try{ await db.collection("content_docs").doc(_ownerDoc.key).delete(); ownerMsg("odMsg","ok","Reverted to the original. Reopening…"); setTimeout(()=>{ viewEditDoc(_ownerDoc.key); },600); }
+  catch(e){ ownerMsg("odMsg","err","Couldn't revert: "+(e.message||e)); }
+};
+
+/* ---- Daily form editor (content_forms) ---- */
+var _ownerForm=null;
+function ofKind(f){
+  switch(f.type){
+    case 'section':   return {tag:'Section heading', mode:'section'};
+    case 'checklist': return {tag:'Tick list',       mode:'checklist'};
+    case 'text':      return {tag:'Short answer',     mode:'label'};
+    case 'number':    return {tag:'Number answer',    mode:'label'};
+    case 'textarea':  return {tag:'Notes box',        mode:'label'};
+    case 'temps':     return {tag:'Temperatures',     mode:'locked'};
+    case 'file':      return {tag:'Photo upload',     mode:'locked'};
+    case 'name':      return {tag:'Name',             mode:'locked'};
+    case 'signature': return {tag:'Signature',        mode:'locked'};
+    default:          return {tag:f.type||'field',    mode:'locked'};
+  }
+}
+function defFields(type){ const def=FORMS[type]; if(!def) return []; return def.sites?(def.sites[store.site]||def.sites.Brighton||[]):(def.fields||[]); }
+function viewEditForm(type){
+  if(!FORMS[type]) return viewHome();
+  const eff=getForm(type);
+  _ownerForm={ type, store:store.site, title:eff.title||"", intro:eff.intro||"",
+    fields: JSON.parse(JSON.stringify(resolveFields(eff))) };
+  renderEditForm();
+}
+function renderEditForm(){
+  const d=_ownerForm; const edited=!!(_formOverrides[d.type]);
+  let h=`<div class="backbar"><button class="back" onclick="window._navBack()">‹ Back</button></div>`;
+  h+=`<h1 class="page">Edit form</h1><p class="sub">${esc(d.store)} version · goes live for everyone when you save.${edited?` · <b>edited</b>`:``}</p>`;
+  h+=`<div class="field"><label class="q">Form name</label><input type="text" id="of_title" value="${esc(d.title)}"></div>`;
+  h+=`<div class="field"><label class="q">Intro note (shown at the top of the form)</label><textarea id="of_intro" rows="2">${esc(d.intro)}</textarea></div>`;
+  h+=`<div class="sec-title" style="font-size:15px;margin:18px 0 6px">Form contents</div>`;
+  h+=`<p class="help" style="margin:-2px 0 12px">Edit the section headings and tick lists (one item per line). The greyed parts (temperatures, photo, name) stay exactly as they are so submissions keep working.</p>`;
+  d.fields.forEach((f,i)=>{
+    const k=ofKind(f); let body="";
+    if(k.mode==='section'){ body=`<div class="field" style="margin:0"><label class="q">Section heading</label><input type="text" class="of_label" value="${esc(f.label||'')}"></div>`; }
+    else if(k.mode==='checklist'){ body=`<div class="field" style="margin:0 0 8px"><label class="q">Heading above the list (optional)</label><input type="text" class="of_clabel" value="${esc(f.label||'')}"></div>
+      <div class="field" style="margin:0"><label class="q">Items to tick (one per line)</label><textarea class="of_items" rows="6">${esc((f.items||[]).join("\n"))}</textarea></div>`; }
+    else if(k.mode==='label'){ body=`<div class="field" style="margin:0"><label class="q">Question / label</label><input type="text" class="of_label" value="${esc(f.label||'')}"></div>`; }
+    else { body=`<p class="muted" style="margin:0">${esc(f.label||k.tag)} <span style="opacity:.7">(kept as-is)</span></p>`; }
+    h+=`<div class="own-sec" data-ofi="${i}" data-mode="${k.mode}">
+      <div style="margin-bottom:8px"><span class="own-badge">${esc(k.tag)}</span></div>
+      ${body}
+      <div class="own-tools">
+        <button onclick="window._ofMove(${i},-1)" ${i===0?'disabled':''}>↑ Up</button>
+        <button onclick="window._ofMove(${i},1)" ${i===d.fields.length-1?'disabled':''}>↓ Down</button>
+        <button class="del" onclick="window._ofDel(${i})">Delete</button>
+      </div></div>`;
+  });
+  h+=`<div style="display:flex;gap:8px;margin-top:4px">
+    <button class="own-add" style="flex:1;margin:0" onclick="window._ofAddSection()">+ Section heading</button>
+    <button class="own-add" style="flex:1;margin:0" onclick="window._ofAddList()">+ Tick list</button>
+  </div>`;
+  h+=`<div id="ofMsg"></div>`;
+  h+=`<div class="own-bar">
+    <button class="pill cta submit" id="ofSave" onclick="window._ofSave()">Save &amp; publish to everyone</button>
+    <button class="own-ghost" onclick="window._ofReset()">Reset to original (not saved yet)</button>
+    ${edited?`<button class="own-danger" onclick="window._ofRevert()">Undo my live edits to this form</button>`:``}
+    <p class="help" style="text-align:center;margin-top:2px">Editing the <b>${esc(d.store)}</b> version only. The other store is not affected.</p>
+  </div>`;
+  shell(h);
+}
+function _ofSync(){
+  if(!_ownerForm) return;
+  const t=document.getElementById("of_title"); if(t) _ownerForm.title=t.value;
+  const n=document.getElementById("of_intro"); if(n) _ownerForm.intro=n.value;
+  document.querySelectorAll("[data-ofi]").forEach(card=>{
+    const i=+card.getAttribute("data-ofi"); const f=_ownerForm.fields[i]; if(!f) return;
+    const mode=card.getAttribute("data-mode");
+    if(mode==='section'){ const el=card.querySelector(".of_label"); if(el) f.label=el.value; }
+    else if(mode==='checklist'){ const l=card.querySelector(".of_clabel"); if(l){ const v=l.value.trim(); if(v) f.label=v; else delete f.label; }
+      const it=card.querySelector(".of_items"); if(it) f.items=it.value.replace(/\r\n/g,"\n").split("\n"); }
+    else if(mode==='label'){ const el=card.querySelector(".of_label"); if(el) f.label=el.value; }
+  });
+}
+function _ofGenKey(){ let k; do{ k='q_'+Math.random().toString(36).slice(2,7); }while(_ownerForm.fields.some(f=>f.key===k)); return k; }
+window._ofAddSection=function(){ _ofSync(); _ownerForm.fields.push({type:'section',label:'New section'}); renderEditForm(); };
+window._ofAddList=function(){ _ofSync(); _ownerForm.fields.push({type:'checklist',key:_ofGenKey(),items:['']}); renderEditForm(); };
+window._ofMove=function(i,dir){ _ofSync(); const j=i+dir; if(j<0||j>=_ownerForm.fields.length) return; const t=_ownerForm.fields[i]; _ownerForm.fields[i]=_ownerForm.fields[j]; _ownerForm.fields[j]=t; renderEditForm(); };
+window._ofDel=function(i){ _ofSync(); const f=_ownerForm.fields[i]; if(!f) return;
+  if(!confirm("Delete this part of the form? Staff will no longer see or fill it in. Past submissions keep what they saved.")) return;
+  _ownerForm.fields.splice(i,1); renderEditForm(); };
+window._ofReset=function(){ if(!confirm("Reset this form back to the original built-in version? Unsaved changes here are lost. (Nothing is published until you press Save.)")) return;
+  const def=FORMS[_ownerForm.type]; _ownerForm.title=def.title||""; _ownerForm.intro=def.intro||"";
+  _ownerForm.fields=JSON.parse(JSON.stringify(defFields(_ownerForm.type))); renderEditForm(); };
+window._ofSave=async function(){
+  _ofSync(); const d=_ownerForm; const def=FORMS[d.type];
+  if(!(d.title||"").trim()){ ownerMsg("ofMsg","err","Give the form a name first."); return; }
+  if(!fbReady){ ownerMsg("ofMsg","err","No connection yet — try again once the app is online."); return; }
+  const fields=d.fields.filter(f=>{
+    if(f.type==='section') return (f.label||'').trim()!=='';
+    if(f.type==='checklist') return (f.items||[]).some(x=>x&&String(x).trim());
+    return true;
+  }).map(f=>{ if(f.type==='checklist'){ f.items=(f.items||[]).map(x=>String(x).trim()).filter(Boolean); } return f; });
+  const existing=_formOverrides[d.type]?JSON.parse(JSON.stringify(_formOverrides[d.type])):{};
+  const payload=Object.assign({}, existing);
+  payload.key=d.type; payload.type=def.type||d.type;
+  payload.title=d.title.trim(); payload.intro=(d.intro!=null?d.intro:(def.intro||""));
+  if(def.sites){
+    payload.sites=payload.sites||{};
+    Object.keys(def.sites).forEach(st=>{
+      if(st===d.store) payload.sites[st]=fields;
+      else if(!payload.sites[st]) payload.sites[st]=(existing.sites&&existing.sites[st])?existing.sites[st]:def.sites[st];
+    });
+    delete payload.fields;
+  } else { payload.fields=fields; delete payload.sites; }
+  const nowIso=new Date().toISOString();
+  payload.stores=Object.assign({}, existing.stores||{}); payload.stores[d.store]={at:nowIso, by:(me&&me.name)||'Owner'};
+  payload.savedAt=nowIso; payload.updatedAt=firebase.firestore.FieldValue.serverTimestamp(); payload.updatedBy=(me&&me.name)||'Owner';
+  const btn=document.getElementById("ofSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  try{ await db.collection("content_forms").doc(d.type).set(payload); ownerMsg("ofMsg","ok","Saved. The "+d.store+" version now shows your changes for everyone."); }
+  catch(e){ ownerMsg("ofMsg","err","Couldn't save: "+(e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent="Save & publish to everyone"; }
+};
+window._ofRevert=async function(){
+  const type=_ownerForm.type, st=_ownerForm.store, def=FORMS[type];
+  if(!confirm("Undo your saved edits to the "+st+" version of this form and put the original back for everyone? The other store is not affected. This cannot be undone.")) return;
+  try{
+    const o=_formOverrides[type]?JSON.parse(JSON.stringify(_formOverrides[type])):null;
+    if(!o||!def.sites){ await db.collection("content_forms").doc(type).delete(); }
+    else{
+      o.sites=o.sites||{}; o.sites[st]=JSON.parse(JSON.stringify(def.sites[st]||[]));
+      if(o.stores) delete o.stores[st];
+      const allOriginal=Object.keys(def.sites).every(s2=>JSON.stringify(o.sites[s2]||def.sites[s2])===JSON.stringify(def.sites[s2]))
+        && (o.title==null||o.title===(def.title||"")) && (o.intro==null||o.intro===(def.intro||""));
+      if(allOriginal){ await db.collection("content_forms").doc(type).delete(); }
+      else{ o.savedAt=new Date().toISOString(); o.updatedAt=firebase.firestore.FieldValue.serverTimestamp(); o.updatedBy=(me&&me.name)||'Owner'; await db.collection("content_forms").doc(type).set(o); }
+    }
+    ownerMsg("ofMsg","ok","Reverted the "+st+" version to the original. Reopening…");
+    setTimeout(()=>{ viewEditForm(type); },600);
+  }catch(e){ ownerMsg("ofMsg","err","Couldn't revert: "+(e.message||e)); }
+};
+
+/* ---- Order email recipients editor (order_recipients) ---- */
+var _ownerEmails=null;
+function viewEditEmails(key){
+  const doc=getDoc(key); const title=(doc&&doc.title)||key;
+  let emails=orderRecipients(key).slice(); if(!emails.length) emails=[""];
+  _ownerEmails={ key, title, emails };
+  renderEditEmails();
+}
+function renderEditEmails(){
+  const d=_ownerEmails; const saved=orderRecipients(d.key);
+  let h=`<div class="backbar"><button class="back" onclick="window._navBack()">‹ Back</button></div>`;
+  h+=`<h1 class="page">Who this emails</h1><p class="sub">${esc(d.title)} · ${esc(store.site)}</p>`;
+  h+=`<div class="note-box">When someone submits <b>${esc(d.title)}</b> at ${esc(store.site)}, the order emails to the addresses below. Leave it empty to fall back to the store inbox (<b>${esc(STORE_EMAIL[store.site]||"")}</b>).</div>`;
+  d.emails.forEach((e,i)=>{
+    h+=`<div class="own-emailrow" data-oei="${i}">
+      <input type="email" class="oe_addr" inputmode="email" autocomplete="off" placeholder="name@example.com" value="${esc(e)}">
+      <button class="del" onclick="window._oeDel(${i})">Remove</button></div>`;
+  });
+  h+=`<button class="own-add" onclick="window._oeAdd()">+ Add another address</button>`;
+  h+=`<div id="oeMsg"></div>`;
+  h+=`<div class="own-bar">
+    <button class="pill cta submit" id="oeSave" onclick="window._oeSave()">Save &amp; publish to everyone</button>
+    ${saved.length?`<button class="own-danger" onclick="window._oeReset()">Reset to the store inbox</button>`:``}
+  </div>`;
+  shell(h);
+}
+function _oeSync(){ if(!_ownerEmails) return; document.querySelectorAll("[data-oei]").forEach(row=>{ const i=+row.getAttribute("data-oei"); const el=row.querySelector(".oe_addr"); if(el) _ownerEmails.emails[i]=el.value; }); }
+window._oeAdd=function(){ _oeSync(); _ownerEmails.emails.push(""); renderEditEmails(); };
+window._oeDel=function(i){ _oeSync(); _ownerEmails.emails.splice(i,1); if(!_ownerEmails.emails.length) _ownerEmails.emails.push(""); renderEditEmails(); };
+window._oeSave=async function(){
+  _oeSync();
+  const clean=_ownerEmails.emails.map(e=>String(e||"").trim()).filter(Boolean);
+  const bad=clean.filter(e=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+  if(bad.length){ ownerMsg("oeMsg","err","Check this address: "+bad[0]); return; }
+  if(!fbReady){ ownerMsg("oeMsg","err","No connection yet — try again once the app is online."); return; }
+  const btn=document.getElementById("oeSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  const id=recipKey(_ownerEmails.key);
+  try{
+    if(!clean.length){ await db.collection("order_recipients").doc(id).delete(); ownerMsg("oeMsg","ok","Saved. This order now goes to the store inbox."); }
+    else{ await db.collection("order_recipients").doc(id).set({ store:store.site, list:_ownerEmails.title, key:_ownerEmails.key, emails:clean, updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' }); ownerMsg("oeMsg","ok","Saved. Orders now email to: "+clean.join(", ")); }
+  }catch(e){ ownerMsg("oeMsg","err","Couldn't save: "+(e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent="Save & publish to everyone"; }
+};
+window._oeReset=async function(){
+  if(!confirm("Reset "+_ownerEmails.title+" back to the store inbox?")) return;
+  try{ await db.collection("order_recipients").doc(recipKey(_ownerEmails.key)).delete(); ownerMsg("oeMsg","ok","Reset to the store inbox. Reopening…"); setTimeout(()=>{ viewEditEmails(_ownerEmails.key); },600); }
+  catch(e){ ownerMsg("oeMsg","err","Couldn't reset: "+(e.message||e)); }
+};
 
 /* =========================================================
    ROLE FEATURES: Form Checker, Rota, Safe Sheet
@@ -2193,6 +2524,14 @@ function router(){
   if(root==="formcheck") return viewFormCheck();
   if(root==="safesheet") return viewSafeSheet();
   if(root==="wastage") return viewWastage();
+  if(root==="edit"){
+    if(!isOwner()) return viewHome();
+    const k=decodeURIComponent(parts[2]||"");
+    if(parts[1]==="doc") return viewEditDoc(k);
+    if(parts[1]==="form") return viewEditForm(k);
+    if(parts[1]==="emails") return viewEditEmails(k);
+    return viewHome();
+  }
   if(root==="order") return viewOrder(parts[1]);
   if(root==="risk") return viewRisk();
   if(root==="records") return viewRecords(parts[1]);
