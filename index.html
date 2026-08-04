@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04b";
+const BUILD = "2026.08.04c";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1847,7 +1847,10 @@ window._submitOrder=async function(key){
   let emailed=false;
   if(fbReady){
     try{
-      await db.collection("mail").add({ to:toList, store:store.site, message:{ subject:subject, text:textBody, html:htmlBody } });
+      // Send a single recipient as plain text (exactly like the long-working
+      // orders), and only use a list when there is genuinely more than one.
+      const toField = toList.length===1 ? toList[0] : toList;
+      await db.collection("mail").add({ to:toField, store:store.site, message:{ subject:subject, text:textBody, html:htmlBody } });
       emailed=true;
     }catch(e){ console.error(e); }
   }
