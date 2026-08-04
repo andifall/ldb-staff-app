@@ -131,6 +131,11 @@
   .own-msg{border-radius:11px;padding:11px 13px;font-size:13.5px;font-weight:600;margin:12px 0 4px}
   .own-msg.ok{background:var(--sage-bg);color:var(--sage-tx)}
   .own-msg.err{background:var(--danger-bg);color:var(--danger)}
+  .own-preview{border:1px solid var(--bark15);border-radius:12px;overflow:hidden;margin:10px 0 4px;background:#fff}
+  .own-prow{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:9px 12px;font-size:13px;border-top:1px solid var(--bark10)}
+  .own-prow:first-child{border-top:0}
+  .own-phead{background:var(--blush);font-weight:700;text-transform:uppercase;letter-spacing:.03em;font-size:11px;color:var(--bark70)}
+  .own-prow>div:last-child{color:var(--bark)}
   .hub-txt .hub-d{font-size:12.5px;color:var(--bark55);margin-top:2px;line-height:1.35}
   /* list rows (sub pages) */
   .rowlist{display:flex;flex-direction:column;gap:10px}
@@ -319,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04a";
+const BUILD = "2026.08.04b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1649,7 +1654,7 @@ const REFDOCS={
 /* Live-editable content: order lists & reference docs can be overridden from the
    `content_docs` collection (written by the editor app). Built-in REFDOCS is the
    fallback, so nothing breaks before a doc has ever been edited. */
-let _docOverrides={};
+var _docOverrides={};
 function getDoc(key){
   const o=_docOverrides[key];
   if(o && !o.hidden){
@@ -1661,7 +1666,7 @@ function getDoc(key){
    from `content_forms`. The override carries the whole form shape (title, intro and
    the per-store field arrays), merged over the built-in so anything not edited, and
    any form never edited, still uses the built-in version. */
-let _formOverrides={};
+var _formOverrides={};
 /* Per-list, per-store email recipients for orders (owner-editable in-app).
    Keyed order_recipients/{store}__{listKey} = {store,list,key,emails:[...]}. */
 var _recipients={};
@@ -1745,6 +1750,14 @@ function detectSupplier(text){
 }
 function itemSupplier(item, section, docTitle){ return detectSupplier(item) || detectSupplier(section) || detectSupplier(docTitle) || "Other (please confirm)"; }
 function cleanItemName(item){ return item.split(" - ")[0].trim(); }
+// An item line can carry a supplier-facing wording after "=>". The part before
+// is what STAFF see (e.g. "Rocket - 3 bags"); the part after is what the SUPPLIER
+// sees in the email (e.g. "bag of rocket"). No "=>" means both are the same.
+function splitOrderItem(line){ const p=String(line||"").split(/\s*=>\s*/); return { show:(p[0]||"").trim(), send:(p[1]||"").trim() }; }
+// Single-supplier lists (owner toggle) send a clean list with no "by supplier"
+// breakdown, using the supplier wording above.
+function docSupplierMode(key){ const o=_docOverrides[key]; return !!(o && o.supplierMode); }
+function sendLabelFor(o){ return o.send || cleanItemName(o.show); }
 let _orderItems=[];
 function viewOrder(key){
   const doc=getDoc(key); if(!doc) return viewHome();
@@ -1764,8 +1777,9 @@ function viewOrder(key){
     h+=`<div class="ord-h">${esc(sec.h)}</div>`;
     sec.notes.forEach(n=> h+=`<div class="ord-note">${esc(n)}</div>`);
     sec.items.forEach(it=>{
-      const idx=_orderItems.length; _orderItems.push({label:it, section:sec.h});
-      h+=`<label class="ord-row"><span class="ord-name">${esc(it)}</span><input type="text" class="ord-qty" data-idx="${idx}" placeholder="e.g. 2, or 2 boxes"></label>`;
+      const parsed=splitOrderItem(it);
+      const idx=_orderItems.length; _orderItems.push({label:parsed.show, show:parsed.show, send:parsed.send, section:sec.h});
+      h+=`<label class="ord-row"><span class="ord-name">${esc(parsed.show)}</span><input type="text" class="ord-qty" data-idx="${idx}" placeholder="e.g. 2, or 2 boxes"></label>`;
     });
   });
   h+=`<div class="field" style="margin-top:16px"><label class="q">Your name (optional)</label><input type="text" id="ordName" placeholder="Who is placing this order?"></div>`;
@@ -1776,14 +1790,15 @@ function viewOrder(key){
 window._submitOrder=async function(key){
   const doc=getDoc(key); if(!doc) return;
   const ordered=[];
-  document.querySelectorAll(".ord-qty").forEach(r=>{ const o=_orderItems[r.dataset.idx]; const q=r.value.trim(); if(q!=="") ordered.push({qty:q, item:o.label, section:o.section}); });
+  document.querySelectorAll(".ord-qty").forEach(r=>{ const o=_orderItems[r.dataset.idx]; const q=r.value.trim(); if(q!=="") ordered.push({qty:q, item:o.show, show:o.show, send:o.send, section:o.section}); });
   const err=$("#ordErr");
   if(!ordered.length){ if(err) err.textContent="Add a quantity to at least one item before submitting."; window.scrollTo({top:0,behavior:'smooth'}); return; }
   if(err) err.textContent="";
-  const items=ordered.map(o=>o.qty+" × "+o.item);
+  const items=ordered.map(o=>o.qty+" × "+o.show);
   const name=(me&&me.name)||($("#ordName")&&$("#ordName").value.trim())||"";
   const toList=orderRecipientsResolved(key);
   const email=toList.join(", ");
+  const supplierMode=docSupplierMode(key);
   const when=new Date().toLocaleString("en-GB",{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   if(fbReady){
     try{ await db.collection("staff_submissions").add({
@@ -1795,26 +1810,39 @@ window._submitOrder=async function(key){
   }
   const subject=store.site+" order - "+doc.title;
   const btn=$("#ordSubmit"); if(btn){ btn.disabled=true; btn.textContent="Sending…"; }
-  // group ordered items by supplier
-  const groups={};
-  ordered.forEach(o=>{ const sup=itemSupplier(o.item,o.section,doc.title); (groups[sup]=groups[sup]||[]).push(o); });
-  const supNames=Object.keys(groups).sort((a,b)=> a.startsWith("Other")?1 : b.startsWith("Other")?-1 : a.localeCompare(b));
-  const textBody=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"
-    +ordered.map(o=>o.qty+"  -  "+o.item).join("\n")
-    +"\n\n--- BY SUPPLIER ---\n"
-    +supNames.map(sup=>sup.toUpperCase()+"\n"+groups[sup].map(o=>"  "+o.qty+"  -  "+cleanItemName(o.item)).join("\n")).join("\n\n")+"\n";
   const badge=(q,big)=>`<span style="display:inline-block;min-width:${big?26:22}px;padding:${big?'6px 12px':'4px 10px'};background:${big?'#FFBE5C':'#F0E8DF'};color:#3D2B1F;border-radius:20px;font-weight:800;font-size:${big?19:15}px;text-align:center;margin-right:${big?12:10}px">${esc(q)}</span>`;
-  const htmlBody=`<div style="font-family:Arial,Helvetica,sans-serif;color:#3D2B1F;max-width:640px">`
-    +`<h2 style="margin:0 0 6px">${esc(store.site)} order</h2>`
-    +`<p style="margin:0 0 2px;font-weight:bold;font-size:16px">${esc(doc.title)}</p>`
-    +`<p style="margin:0 0 2px;color:#7a6a5c">Placed by: ${esc(name||"(not given)")}</p>`
-    +`<p style="margin:0 0 18px;color:#7a6a5c">${esc(when)}</p>`
-    +ordered.map(o=>`<div style="margin:0 0 12px;font-size:16px;line-height:1.5">${badge(o.qty,true)}${esc(o.item)}</div>`).join("")
-    +`<hr style="border:none;border-top:1px solid #e5ddd2;margin:24px 0 18px"><h3 style="margin:0 0 14px">Order by supplier</h3>`
-    +supNames.map(sup=>`<div style="margin:0 0 18px"><div style="font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:#3D2B1F;margin:0 0 8px">${esc(sup)}</div>`
-        +groups[sup].map(o=>`<div style="margin:0 0 7px;font-size:15px;line-height:1.4">${badge(o.qty,false)}${esc(cleanItemName(o.item))}</div>`).join("")
-        +`</div>`).join("")
-    +`</div>`;
+  let textBody, htmlBody;
+  if(supplierMode){
+    // Clean single-supplier order: no "by supplier" breakdown, supplier wording.
+    textBody=store.site+" order - "+doc.title+"\nDate: "+when+(name?("\nPlaced by: "+name):"")+"\n\n"
+      +ordered.map(o=>o.qty+"  "+sendLabelFor(o)).join("\n")+"\n";
+    htmlBody=`<div style="font-family:Arial,Helvetica,sans-serif;color:#3D2B1F;max-width:640px">`
+      +`<h2 style="margin:0 0 6px">${esc(store.site)} order</h2>`
+      +`<p style="margin:0 0 2px;font-weight:bold;font-size:16px">${esc(doc.title)}</p>`
+      +`<p style="margin:0 0 18px;color:#7a6a5c">${esc(when)}${name?(" · Placed by: "+esc(name)):""}</p>`
+      +ordered.map(o=>`<div style="margin:0 0 12px;font-size:16px;line-height:1.5">${badge(o.qty,true)}${esc(sendLabelFor(o))}</div>`).join("")
+      +`</div>`;
+  } else {
+    // group ordered items by supplier
+    const groups={};
+    ordered.forEach(o=>{ const sup=itemSupplier(o.show,o.section,doc.title); (groups[sup]=groups[sup]||[]).push(o); });
+    const supNames=Object.keys(groups).sort((a,b)=> a.startsWith("Other")?1 : b.startsWith("Other")?-1 : a.localeCompare(b));
+    textBody=store.site+" order\n"+doc.title+"\nPlaced by: "+(name||"(not given)")+"\nDate: "+when+"\n\n"
+      +ordered.map(o=>o.qty+"  -  "+o.show).join("\n")
+      +"\n\n--- BY SUPPLIER ---\n"
+      +supNames.map(sup=>sup.toUpperCase()+"\n"+groups[sup].map(o=>"  "+o.qty+"  -  "+sendLabelFor(o)).join("\n")).join("\n\n")+"\n";
+    htmlBody=`<div style="font-family:Arial,Helvetica,sans-serif;color:#3D2B1F;max-width:640px">`
+      +`<h2 style="margin:0 0 6px">${esc(store.site)} order</h2>`
+      +`<p style="margin:0 0 2px;font-weight:bold;font-size:16px">${esc(doc.title)}</p>`
+      +`<p style="margin:0 0 2px;color:#7a6a5c">Placed by: ${esc(name||"(not given)")}</p>`
+      +`<p style="margin:0 0 18px;color:#7a6a5c">${esc(when)}</p>`
+      +ordered.map(o=>`<div style="margin:0 0 12px;font-size:16px;line-height:1.5">${badge(o.qty,true)}${esc(o.show)}</div>`).join("")
+      +`<hr style="border:none;border-top:1px solid #e5ddd2;margin:24px 0 18px"><h3 style="margin:0 0 14px">Order by supplier</h3>`
+      +supNames.map(sup=>`<div style="margin:0 0 18px"><div style="font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:#3D2B1F;margin:0 0 8px">${esc(sup)}</div>`
+          +groups[sup].map(o=>`<div style="margin:0 0 7px;font-size:15px;line-height:1.4">${badge(o.qty,false)}${esc(sendLabelFor(o))}</div>`).join("")
+          +`</div>`).join("")
+      +`</div>`;
+  }
   // queue the order email in Firebase (Trigger Email extension sends it to the store inbox)
   let emailed=false;
   if(fbReady){
@@ -1856,6 +1884,8 @@ var _ownerDoc=null;
 function viewEditDoc(key){
   const cur=getDoc(key);
   _ownerDoc={ key, title:(cur&&cur.title)||"", sub:(cur&&cur.sub)||"",
+    supplierMode: docSupplierMode(key),
+    isOrder: /^order_/.test(key),
     sections:((cur&&cur.sections)||[]).map(s=>({h:s.h||"",b:s.b||""})) };
   if(!_ownerDoc.sections.length) _ownerDoc.sections.push({h:"",b:""});
   renderEditDoc();
@@ -1866,8 +1896,14 @@ function renderEditDoc(){
   h+=`<h1 class="page">Edit list</h1><p class="sub">Changes go live for everyone as soon as you save.${edited?` · <b>edited</b>`:``}</p>`;
   h+=`<div class="field"><label class="q">List name</label><input type="text" id="od_title" value="${esc(d.title)}"></div>`;
   h+=`<div class="field"><label class="q">Small line under the name (optional)</label><input type="text" id="od_sub" value="${esc(d.sub)}"></div>`;
+  if(d.isOrder){
+    h+=`<label class="wchk" style="margin:6px 0 4px"><input type="checkbox" id="od_supmode" ${d.supplierMode?'checked':''}> <span>This list goes to <b>one supplier</b>. Send a clean order with no "by supplier" breakdown, using the supplier wording below.</span></label>`;
+  }
   h+=`<div class="sec-title" style="font-size:15px;margin:18px 0 8px">Sections</div>`;
-  h+=`<p class="help" style="margin:-2px 0 12px">Each section has a heading and its items. Put one item per line, for example <b>Feta 200g - 4</b>. The number after the dash is the standing quantity.</p>`;
+  h+=`<p class="help" style="margin:-2px 0 4px">Each section has a heading and its items, one item per line, for example <b>Feta 200g - 4</b> (the number after the dash is the standing quantity staff keep).</p>`;
+  if(d.isOrder){
+    h+=`<p class="help" style="margin:0 0 12px">To make the <b>email to the supplier</b> read differently from what staff see, add <b>=&gt;</b> and the supplier wording. Example: <b>Rocket - 3 bags =&gt; bag of rocket</b>. Staff still see "Rocket - 3 bags"; if they order 1, the supplier gets "1 bag of rocket". Items with no <b>=&gt;</b> just drop the "- 3 bags" part in the email.</p>`;
+  }
   d.sections.forEach((s,i)=>{
     h+=`<div class="own-sec" data-osec="${i}">
       <div class="field" style="margin:0 0 8px"><label class="q">Section heading</label><input type="text" class="od_h" value="${esc(s.h)}"></div>
@@ -1879,6 +1915,10 @@ function renderEditDoc(){
       </div></div>`;
   });
   h+=`<button class="own-add" onclick="window._odAddSec()">+ Add a section</button>`;
+  if(d.isOrder){
+    h+=`<button class="own-ghost" style="margin-top:4px" onclick="window._odPreview()">Preview what the supplier sees</button>`;
+    h+=`<div id="odPreview"></div>`;
+  }
   h+=`<div id="odMsg"></div>`;
   h+=`<div class="own-bar">
     <button class="pill cta submit" id="odSave" onclick="window._odSave()">Save &amp; publish to everyone</button>
@@ -1886,10 +1926,26 @@ function renderEditDoc(){
   </div>`;
   shell(h);
 }
+window._odPreview=function(){
+  _odSync(); const d=_ownerDoc; const rows=[];
+  d.sections.forEach(sec=>{
+    String(sec.b||"").split("\n").forEach(line=>{
+      const l=line.trim(); if(!l) return; if(isOrderNote(sec.h,l)) return;
+      const p=splitOrderItem(l); rows.push({ show:p.show, send:p.send||cleanItemName(p.show) });
+    });
+  });
+  const box=document.getElementById("odPreview"); if(!box) return;
+  if(!rows.length){ box.innerHTML=`<div class="own-msg">No items yet.</div>`; return; }
+  box.innerHTML=`<div class="own-preview">
+    <div class="own-prow own-phead"><div>Staff see</div><div>Supplier gets (e.g. 2 →)</div></div>
+    ${rows.map(r=>`<div class="own-prow"><div>${esc(r.show)}</div><div><b>2 ${esc(r.send)}</b></div></div>`).join("")}
+  </div>`;
+};
 function _odSync(){
   if(!_ownerDoc) return;
   const t=document.getElementById("od_title"); if(t) _ownerDoc.title=t.value;
   const s=document.getElementById("od_sub"); if(s) _ownerDoc.sub=s.value;
+  const sm=document.getElementById("od_supmode"); if(sm) _ownerDoc.supplierMode=sm.checked;
   document.querySelectorAll("[data-osec]").forEach(card=>{
     const i=+card.getAttribute("data-osec"); const sec=_ownerDoc.sections[i]; if(!sec) return;
     const hh=card.querySelector(".od_h"); if(hh) sec.h=hh.value;
@@ -1905,7 +1961,7 @@ window._odSave=async function(){
   if(!fbReady){ ownerMsg("odMsg","err","No connection yet — try again once the app is online."); return; }
   const btn=document.getElementById("odSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
   const payload={ key:d.key, title:d.title.trim(), sub:(d.sub||"").trim(),
-    store:docStoreFor(d.key), kind:'doc',
+    store:docStoreFor(d.key), kind:'doc', supplierMode:!!d.supplierMode,
     sections:d.sections.filter(s=>(s.h&&s.h.trim())||(s.b&&s.b.trim())).map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,"")})),
     savedAt:new Date().toISOString(), updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:(me&&me.name)||'Owner' };
   try{ await db.collection("content_docs").doc(d.key).set(payload); ownerMsg("odMsg","ok","Saved. Everyone's app now shows this version."); }
