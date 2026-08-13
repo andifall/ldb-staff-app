@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04d";
+const BUILD = "2026.08.04e";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2291,6 +2291,18 @@ async function loadHistory(force){
   _historyKey=hk;
   const days=[]; const now=new Date();
   for(let i=1;i<=7;i++){ days.push(new Date(now.getTime()-i*86400000).toLocaleDateString("en-CA")); }
+  // A form counts as done if ANYONE submitted it that day (whoever was scheduled).
+  // We read the real submissions so a manager completing it still marks it done,
+  // even if the little daily_status record never got written.
+  const sodDates=new Set(), eodDates=new Set();
+  try{
+    const subRes=await Promise.all([
+      db.collection("staff_submissions").where("store","==",store.site).where("formType","==","start_of_day").get(),
+      db.collection("staff_submissions").where("store","==",store.site).where("formType","==","end_of_day").get(),
+    ]);
+    subRes[0].forEach(function(d){ const s=d.data(); try{ sodDates.add(new Date(s.createdAtLocal).toLocaleDateString("en-CA")); }catch(e){} });
+    subRes[1].forEach(function(d){ const s=d.data(); try{ eodDates.add(new Date(s.createdAtLocal).toLocaleDateString("en-CA")); }catch(e){} });
+  }catch(e){ console.warn("history submissions:",e&&e.message); }
   const out=[];
   for(const date of days){
     try{
@@ -2303,8 +2315,10 @@ async function loadHistory(force){
       const ds=results[0].exists?results[0].data():{};
       const rt=results[1].exists?results[1].data():{};
       const ak=(results[2].exists?results[2].data():{}).acks||{};
-      if(rt.opener && !ds.sod){ const k=ackKey("miss_sod"); if(!ak[k]) out.push({date, kind:"missed", what:"Start of Day not done", who:(rt.opener&&rt.opener.name)||"", key:k}); }
-      if(rt.closer && !ds.eod){ const k=ackKey("miss_eod"); if(!ak[k]) out.push({date, kind:"missed", what:"End of Day not done", who:(rt.closer&&rt.closer.name)||"", key:k}); }
+      const sodDone = !!ds.sod || sodDates.has(date);
+      const eodDone = !!ds.eod || eodDates.has(date);
+      if(rt.opener && !sodDone){ const k=ackKey("miss_sod"); if(!ak[k]) out.push({date, kind:"missed", what:"Start of Day not done", who:(rt.opener&&rt.opener.name)||"", key:k}); }
+      if(rt.closer && !eodDone){ const k=ackKey("miss_eod"); if(!ak[k]) out.push({date, kind:"missed", what:"End of Day not done", who:(rt.closer&&rt.closer.name)||"", key:k}); }
       (ds.sod&&ds.sod.bad3||[]).forEach(function(u){ const k=ackKey("temp_sod_"+u); if(!ak[k]) out.push({date, kind:"temp", what:"Start of Day: "+u, key:k}); });
       (ds.eod&&ds.eod.bad3||[]).forEach(function(u){ const k=ackKey("temp_eod_"+u); if(!ak[k]) out.push({date, kind:"temp", what:"End of Day: "+u, key:k}); });
     }catch(e){ console.warn("history:",e&&e.message); }
@@ -2379,7 +2393,7 @@ function viewFormCheck(){
   // Missed / done cards
   function statusCard(title, done, missedNow, doneInfo, which, key){
     const sched=schedLine(which);
-    if(done) return `<div class="fc-card ok"><h3>${esc(title)} · done</h3><div class="muted" style="font-size:13px">By ${esc(doneInfo&&doneInfo.by||"someone")}${doneInfo&&doneInfo.at?(" at "+new Date(doneInfo.at).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""}</div>${sched}</div>`;
+    if(done) return `<div class="fc-card ok"><h3>${esc(title)} · done</h3><div class="muted" style="font-size:13px">By ${esc(doneInfo&&doneInfo.by||"someone")}${doneInfo&&doneInfo.at?(" at "+new Date(doneInfo.at).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})):""}</div></div>`;
     if(missedNow){
       const acked=!!ackInfo(key);
       return `<div class="fc-card ${acked?'':'bad'}"><h3>${acked?'':'⚠️ '}${esc(title)} not done${acked?' · checked':''}</h3><div style="font-size:13px">No one completed it and the cut-off has passed.</div>${sched}${acked?checkedLine(key)+undoBtn(key):ackBtn(key)}</div>`;
