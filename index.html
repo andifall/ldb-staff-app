@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04e";
+const BUILD = "2026.08.04f";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -473,6 +473,7 @@ const FORMS = {
         "Make sure the water from all stations is running hot within one minute of turning on the tap",
         "Make sure there is soap on each handwashing station as well as ample blue roll for drying hands. If not, replenish straight away.",
         "KITCHEN: Ensure ALL food preperation surfaces are washed down with hot, soapy water and sprayed with antibac BEFORE carrying out any kitchen duties. Discard cloth/sponge after usage.",
+        "Water the flowers out the front. @days: Mon, Fri",
       ]},
       {type:"textarea",key:"notes",label:"Any problems or changes - what did you do?",optional:true},
       {type:"text",key:"name",label:"Name",required:true},
@@ -715,6 +716,19 @@ function allFieldDefs(def){
   return def.fields || [];
 }
 
+/* Day-specific checklist items. End a checklist line with "@days: Mon, Fri"
+   and it only shows on those days, alongside everything else. */
+var DAY_NUM={sun:0,sunday:0,mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6};
+function parseDayTag(text){
+  const s=String(text||"");
+  const m=s.match(/@days:\s*([A-Za-z ,\/&]+)\s*$/i);
+  if(!m) return { show:true, label:s };
+  const label=s.slice(0,m.index).replace(/\s+$/,"");
+  const wanted=new Set();
+  m[1].split(/[,\/&\s]+/).forEach(function(tok){ const k=tok.trim().toLowerCase(); if(DAY_NUM.hasOwnProperty(k)) wanted.add(DAY_NUM[k]); });
+  if(!wanted.size) return { show:true, label:label||s };
+  return { show: wanted.has(new Date().getDay()), label:label };
+}
 /* =========================================================
    FORM ENGINE
    ========================================================= */
@@ -746,9 +760,12 @@ function renderField(f){
     case "yesno":
       return `<div class="field"><label class="q">${esc(f.label)}</label>
         <div class="quiz">${["Yes","No"].map(o=>`<label class="opt"><input type="radio" name="${f.key}" value="${o}">${o}</label>`).join("")}</div></div>`;
-    case "checklist":
+    case "checklist": {
+      const rows=(f.items||[]).map(parseDayTag).filter(p=>p.show);
+      if(!rows.length) return "";
       return `<div class="field"><div class="checklist" data-checklist="${f.key}">
-        ${f.items.map((it,i)=>`<div class="check"><input type="checkbox" id="${f.key}_${i}" value="${esc(it)}"><label for="${f.key}_${i}">${esc(it)}</label></div>`).join("")}</div></div>`;
+        ${rows.map((p,i)=>`<div class="check"><input type="checkbox" id="${f.key}_${i}" value="${esc(p.label)}"><label for="${f.key}_${i}">${esc(p.label)}</label></div>`).join("")}</div></div>`;
+    }
     case "acknowledge":
       return `<div class="field"><label class="q">${esc(f.label)}${req}</label>
         <div class="ack" data-ack="${f.key}">${f.items.map((it,i)=>`<label class="opt"><input type="checkbox" value="${esc(it)}">${esc(it)}</label>`).join("")}</div></div>`;
@@ -2025,6 +2042,7 @@ function renderEditForm(){
   h+=`<div class="field"><label class="q">Intro note (shown at the top of the form)</label><textarea id="of_intro" rows="2">${esc(d.intro)}</textarea></div>`;
   h+=`<div class="sec-title" style="font-size:15px;margin:18px 0 6px">Form contents</div>`;
   h+=`<p class="help" style="margin:-2px 0 12px">Edit the section headings and tick lists (one item per line). The greyed parts (temperatures, photo, name) stay exactly as they are so submissions keep working.</p>`;
+  h+=`<p class="help" style="margin:-6px 0 12px">Tip: to make a tick-list item appear only on certain days, end the line with <b>@days: Mon, Fri</b> (any day names). Example: <b>Water the flowers out front @days: Mon, Fri</b>. It shows only on those days, next to everything else.</p>`;
   d.fields.forEach((f,i)=>{
     const k=ofKind(f); let body="";
     if(k.mode==='section'){ body=`<div class="field" style="margin:0"><label class="q">Section heading</label><input type="text" class="of_label" value="${esc(f.label||'')}"></div>`; }
