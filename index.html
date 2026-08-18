@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04g";
+const BUILD = "2026.08.04h";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1183,6 +1183,10 @@ function viewSettings(){
       <button class="pill ${store.site==='Brighton'?'':'ghost'}" onclick="window._setSite('Brighton')">Brighton</button>
       <button class="pill ${store.site==='Worthing'?'':'ghost'}" onclick="window._setSite('Worthing')">Worthing</button>
     </div><div class="help" style="margin-top:8px">Most staff only work at one store, so you'll rarely need to change this.</div></div>`;
+  if(isOwner()){
+    h += `<div class="field"><label class="q">Owner</label>
+      <div class="rowlist">${rowItem("Manage staff & positions","#/edit/staff")}</div></div>`;
+  }
   if(manager){
     h += `<div class="sec-title">Management</div><p class="sub">Signed in as ${esc(manager.email)}.</p>
       <button class="pill ghost" onclick="window._logout()">Log out of management</button>`;
@@ -2202,6 +2206,52 @@ window._oeReset=async function(){
   catch(e){ ownerMsg("oeMsg","err","Couldn't reset: "+(e.message||e)); }
 };
 
+/* ---- Owner: staff & positions (change a person's role in-app) ---- */
+var _ownerStaff=null, _ownerStaffUnsub=null;
+function viewEditStaff(){
+  let h=`<div class="backbar"><button class="back" onclick="window._navBack()">‹ Back</button></div>`;
+  h+=`<h1 class="page">Staff & positions</h1><p class="sub">Set who is a Barista, Supervisor or Management. Changes apply to their app straight away.</p>`;
+  if(!fbReady){ shell(h+`<p class="err">Needs an internet connection.</p>`); return; }
+  h+=`<div id="staffMsg"></div><div id="staffList"><div class="spinner"></div></div>`;
+  shell(h);
+  if(_ownerStaffUnsub){ try{_ownerStaffUnsub()}catch(e){} }
+  _ownerStaffUnsub=db.collection("staff").onSnapshot(function(snap){
+    _ownerStaff=snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
+      .filter(function(s){ return s.active!==false; })
+      .sort(function(a,b){ return String(a.store||"").localeCompare(String(b.store||"")) || String(a.name||"").localeCompare(String(b.name||"")); });
+    renderStaffList();
+  }, function(e){ const b=$("#staffList"); if(b) b.innerHTML=`<p class="err">Couldn't load staff: ${esc(e.message||e)}</p>`; });
+}
+function renderStaffList(){
+  const b=document.getElementById("staffList"); if(!b) return;
+  if(!_ownerStaff||!_ownerStaff.length){ b.innerHTML=`<p class="muted">No staff registered yet.</p>`; return; }
+  b.innerHTML=_ownerStaff.map(function(s){
+    const opts=POSITIONS.map(function(p){ return `<option value="${p[0]}"${s.position===p[0]?' selected':''}>${esc(p[1])}</option>`; }).join("");
+    return `<div class="own-sec" data-staff="${s.id}">
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
+        <div><div style="font-weight:600">${esc(s.name||"(no name)")}</div><div class="muted" style="font-size:12.5px">${esc(s.store||"")}</div></div>
+        <select class="sel" style="max-width:180px" onchange="window._setStaffPos('${s.id}', this.value)">${opts}</select>
+      </div>
+      <div class="own-tools"><button class="del" onclick="window._removeStaff('${s.id}','${esc((s.name||'').replace(/'/g,''))}')">Remove from app</button></div>
+    </div>`;
+  }).join("");
+}
+window._setStaffPos=async function(id, pos){
+  const s=(_ownerStaff||[]).find(function(x){ return x.id===id; }); if(!s) return;
+  if(!["barista","supervisor","management"].includes(pos)) return;
+  try{
+    await db.collection("staff").doc(id).set({ name:s.name||"", store:s.store||"", position:pos, active:true,
+      updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' }, {merge:true});
+    ownerMsg("staffMsg","ok",(s.name||"They")+" is now "+posLabel(pos)+".");
+  }catch(e){ ownerMsg("staffMsg","err","Couldn't save: "+(e.message||e)); }
+};
+window._removeStaff=async function(id, name){
+  if(!confirm("Remove "+(name||"this person")+" from the app? They'll be signed out and will need to set themselves up again if they come back.")) return;
+  try{ await db.collection("staff").doc(id).set({ active:false, updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' }, {merge:true});
+    ownerMsg("staffMsg","ok",(name||"They")+" has been removed.");
+  }catch(e){ ownerMsg("staffMsg","err","Couldn't remove: "+(e.message||e)); }
+};
+
 /* =========================================================
    ROLE FEATURES: Form Checker, Rota, Safe Sheet
    ========================================================= */
@@ -2632,6 +2682,7 @@ function router(){
   if(hash!=="#/manage" && _subsUnsub){ try{_subsUnsub()}catch(e){} _subsUnsub=null; }
   if(root!=="records" && _recUnsub){ try{_recUnsub()}catch(e){} _recUnsub=null; }
   if(root!=="wastage" && _wasteTodayUnsub){ try{_wasteTodayUnsub()}catch(e){} _wasteTodayUnsub=null; }
+  if(hash!=="#/edit/staff" && _ownerStaffUnsub){ try{_ownerStaffUnsub()}catch(e){} _ownerStaffUnsub=null; }
   if(!store.site && hash!=="#/settings"){ return viewSitePicker(); }
   if(store.site && !me && hash!=="#/settings"){ return viewIdentify(); }
   if(root===""||root===undefined) return viewHome();
@@ -2647,6 +2698,7 @@ function router(){
     if(parts[1]==="doc") return viewEditDoc(k);
     if(parts[1]==="form") return viewEditForm(k);
     if(parts[1]==="emails") return viewEditEmails(k);
+    if(parts[1]==="staff") return viewEditStaff();
     return viewHome();
   }
   if(root==="order") return viewOrder(parts[1]);
