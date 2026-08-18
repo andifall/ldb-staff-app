@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04f";
+const BUILD = "2026.08.04g";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1483,9 +1483,12 @@ const REC_TYPES=[
   ["kitchen_logs","Kitchen Log photos"],
   ["fat_trap","Fat Trap records"],
 ];
+// Record types temporarily hidden from the Environmental Health list (still
+// being set up). Remove from here to switch a group back on.
+var HIDDEN_REC_TYPES = ["kitchen_logs"];
 // Which record types show at each store. Fat Trap is Brighton only.
 function recTypesFor(site){
-  return REC_TYPES.filter(([t])=> t==="fat_trap" ? site==="Brighton" : t==="kitchen_logs" ? site==="Worthing" : true);
+  return REC_TYPES.filter(([t])=> HIDDEN_REC_TYPES.indexOf(t)<0 && (t==="fat_trap" ? site==="Brighton" : t==="kitchen_logs" ? site==="Worthing" : true));
 }
 // Food-safety documents, per store. Risk assessments & Electrical are Brighton only.
 // ext links open a PDF that sits next to index.html on the host.
@@ -1552,7 +1555,14 @@ function recSummary(s){
 function whoLabel(s){ return s.submittedBy?esc(s.submittedBy):`<span class="muted">No name recorded</span>`; }
 function renderRecords(){
   const b=$("#recBody"); if(!b||_recSubs===null) return;
-  if(!_recSubs.length){ b.innerHTML=`<p class="muted">No ${esc(recTitle(_recType).toLowerCase())} yet for ${esc(store.site)}. New submissions will appear here.</p>`; return; }
+  if(!_recSubs.length){
+    if(_recType==="staff_training"){
+      b.innerHTML=`<div class="note-box">No staff training records have been uploaded yet. New submissions will appear here. Please speak to management regarding this.</div>`;
+    } else {
+      b.innerHTML=`<p class="muted">No ${esc(recTitle(_recType).toLowerCase())} yet for ${esc(store.site)}. New submissions will appear here.</p>`;
+    }
+    return;
+  }
   b.innerHTML=_recSubs.slice(0,300).map(s=>{
     const alert=subHasAlert(s); const flag=alert?`<span class="bad-badge">temp alert</span>`:"";
     const sum=recSummary(s);
