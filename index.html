@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04i";
+const BUILD = "2026.08.04k";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1512,7 +1512,8 @@ function recTypesFor(site){
 // ext links open a PDF that sits next to index.html on the host.
 function ehDocsFor(site){
   if(site==="Worthing") return [
-    {label:"Safer Food Better Business", ext:"sfbb-worthing.pdf"},
+    {label:"Safer Food Better Business", route:"#/where/sfbb"},
+    {label:"Pest Control Records", route:"#/where/pest"},
   ];
   return [
     {label:"Safer Food Better Business", ext:"sfbb-brighton.pdf"},
@@ -1528,6 +1529,28 @@ function viewRisk(){
   let h=backbar("Environmental Health","#/eh");
   h+=`<h1 class="page">Risk Assessments</h1><p class="sub">${esc(store.site)}</p>`;
   h+=`<div class="rowlist">${RISK_ASSESSMENTS.map(d=>rowItem(d.label,d.route,d.ext)).join("")}</div>`;
+  shell(h);
+}
+// Records kept physically on site: tapping shows where they're stored, with a photo.
+const STORAGE_IMG = { Worthing:"storage-worthing.jpg" };
+const STORAGE_INFO = {
+  sfbb: {
+    title:"Safer Food Better Business",
+    msg:"The 2026 Safer Food Better Business pack has been completed and filled in on paper. It is kept here in the back room, in the green folder on the window shelf (shown below).",
+  },
+  pest: {
+    title:"Pest Control Records",
+    msg:"Our pest control records are completed and kept on paper here in the back room, in the red folder (Rentokil / Pest Prevention Service) next to the green folder on the window shelf (shown below).",
+  },
+};
+function viewWhereStored(key){
+  const info=STORAGE_INFO[key]; if(!info) return viewHome();
+  const img=STORAGE_IMG[store.site];
+  let h=backbar("Environmental Health","#/eh");
+  h+=`<h1 class="page">${esc(info.title)}</h1><p class="sub">${esc(store.site)}</p>`;
+  h+=`<div class="note-box">${esc(info.msg)}</div>`;
+  if(img) h+=`<img src="${esc(img)}" alt="Where the ${esc(info.title)} is stored" style="width:100%;border-radius:14px;border:1px solid var(--bark10);margin-top:6px;display:block">`;
+  else h+=`<p class="muted">Photo coming soon.</p>`;
   shell(h);
 }
 function recTitle(type){ const r=REC_TYPES.find(x=>x[0]===type); return r?r[1]:"Records"; }
@@ -2704,6 +2727,7 @@ function router(){
   if(root==="settings") return viewSettings();
   if(root==="hub") return viewHub(parts[1]);
   if(root==="eh") return viewEH();
+  if(root==="where") return viewWhereStored(parts[1]);
   if(root==="formcheck") return viewFormCheck();
   if(root==="safesheet") return viewSafeSheet();
   if(root==="wastage") return viewWastage();
