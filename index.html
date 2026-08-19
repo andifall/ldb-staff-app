@@ -324,7 +324,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04h";
+const BUILD = "2026.08.04i";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -619,6 +619,18 @@ const FORMS = {
     intro:"Every Friday, take a photo of the kitchen logs and upload it here. It saves into Environmental Health as our record that we're keeping on top of the kitchen paperwork.",
     fields:[
       {type:"file",key:"photo",label:"Photo(s) of this week's kitchen logs",optional:true},
+      {type:"textarea",key:"notes",label:"Anything to note? (optional)",optional:true},
+    ]
+  },
+
+  staff_training: {
+    title:"Upload Training Certificate", type:"staff_training",
+    intro:"Upload a food hygiene or other training certificate here. It saves into Environmental Health under your name as a record of your training.",
+    fields:[
+      {type:"text",key:"course",label:"Course / qualification (e.g. Food Safety Level 2)",required:true},
+      {type:"file",key:"certificate",label:"Photo or scan of the certificate",optional:true},
+      {type:"text",key:"provider",label:"Training provider (optional)",optional:true},
+      {type:"date",key:"completed",label:"Date completed (shown on the certificate)",optional:true},
       {type:"textarea",key:"notes",label:"Anything to note? (optional)",optional:true},
     ]
   },
@@ -1025,12 +1037,14 @@ const HUBS=[
     Brighton:[
       {label:'Accident / Incident', route:'#/form/accident'},
       {label:'Deep Cleans', route:'#/form/deep_cleans'},
+      {label:'Upload Training Certificate', route:'#/form/staff_training'},
       {label:'Wastage Log', route:'#/wastage'},
     ],
     Worthing:[
       {label:'Accident / Incident', route:'#/form/accident'},
       {label:'Deep Cleans', route:'#/form/deep_cleans'},
       {label:'Kitchen Logs (every Friday)', route:'#/form/kitchen_logs'},
+      {label:'Upload Training Certificate', route:'#/form/staff_training'},
       {label:'Wastage Log', route:'#/wastage'},
     ],
   }},
@@ -1549,6 +1563,7 @@ function recSummary(s){
   if(s.formType==="four_weekly") return d.observed_problem_or_repeat==="Yes"?"Issue noted in review":"Reviewed, no issues";
   if(s.formType==="fat_trap") return d.completed||d.notes||"";
   if(s.formType==="kitchen_logs") return (d.photos&&d.photos.length? (d.photos.length+" photo"+(d.photos.length>1?"s":"")) : "Logged")+(d.notes?(" · "+d.notes):"");
+  if(s.formType==="staff_training") return d.course||"Training certificate";
   if(d.temps&&typeof d.temps==="object"){
     const bad=Object.entries(d.temps).filter(([n,t])=>t&&t.ok===false).map(([n,t])=>`${n} ${t.c}°C`);
     if(bad.length) return "Out of range: "+bad.join(", ");
