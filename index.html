@@ -256,6 +256,8 @@
   .sub-card.alert{border-left:4px solid var(--danger)}
   .sub-card{border:1px solid var(--bark10);border-radius:14px;padding:13px 15px;margin-bottom:10px;background:#fff;cursor:pointer;box-shadow:var(--shadow)}
   .rec-sum{color:var(--bark70);font-size:13px;margin-top:5px}
+  .load-more{display:block;width:100%;margin:6px 0 4px;padding:12px;border:1px solid var(--bark10);border-radius:14px;background:var(--cream);color:var(--bark);font-family:var(--head);font-size:14px;font-weight:600;cursor:pointer}
+  .load-more:active{background:var(--bark10)}
   .ord-h{font-family:var(--head);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:13px;color:var(--bark);margin:16px 0 8px}
   .ord-note{font-size:13px;color:var(--bark70);margin:0 0 8px;background:var(--blush);border-radius:10px;padding:8px 11px}
   .ord-row{display:block;padding:12px 14px;border:1px solid var(--bark10);border-radius:12px;background:#fff;margin-bottom:8px}
@@ -324,7 +326,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04k";
+const BUILD = "2026.08.04m";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -332,7 +334,7 @@ const store = {
 let manager = null; // {email, scope}
 
 /* ---------- Staff identity (name + position, saved per device) ---------- */
-const POSITIONS = [["barista","Barista"],["supervisor","Supervisor"],["management","Management"]];
+const POSITIONS = [["barista","Barista"],["kitchen_porter","Kitchen Porter"],["supervisor","Supervisor"],["management","Management"]];
 function posLabel(p){ const f=POSITIONS.find(x=>x[0]===p); return f?f[1]:""; }
 function roleRank(p){ return p==='management'?2 : p==='supervisor'?1 : 0; }
 function roleAtLeast(r){ return !!me && roleRank(me.position) >= roleRank(r); }
@@ -620,6 +622,16 @@ const FORMS = {
     fields:[
       {type:"file",key:"photo",label:"Photo(s) of this week's kitchen logs",optional:true},
       {type:"textarea",key:"notes",label:"Anything to note? (optional)",optional:true},
+    ]
+  },
+
+  fat_trap: {
+    title:"Fat Trap Report", type:"fat_trap",
+    intro:"To be completed daily by the Kitchen Porter.",
+    fields:[
+      {type:"section",label:"What has been completed?"},
+      {type:"checklist",key:"completed",items:["Emptied (Mon-Fri)","Salting Dishwasher (twice a week)","Deep Clean (monthly)"]},
+      {type:"textarea",key:"notes",label:"Any notes?",optional:true},
     ]
   },
 
@@ -950,6 +962,26 @@ async function processPhotos(def, data){
     if(urls.length) data[f.key]=urls;
   }
 }
+// Google Drive mirror: the Fat Trap Report is also appended to a Google Sheet in
+// the Marina's Drive folder so their management can read it. Paste the deployed
+// Apps Script web-app URL below to switch it on. Empty = off (the app still saves
+// the report to Firestore and shows it in-app as normal either way).
+var FAT_TRAP_WEBHOOK = "";
+function mirrorToSheet(def, data, payload){
+  if(def.type!=="fat_trap" || !FAT_TRAP_WEBHOOK) return;
+  var done = Array.isArray(data.completed) ? data.completed : [];
+  var body = {
+    date: new Date().toLocaleString("en-GB"),
+    store: payload.store||"",
+    submittedBy: payload.submittedBy||"",
+    emptied: done.indexOf("Emptied (Mon-Fri)")>=0 ? "Yes" : "No",
+    salting_dishwasher: done.indexOf("Salting Dishwasher (twice a week)")>=0 ? "Yes" : "No",
+    deep_clean: done.indexOf("Deep Clean (monthly)")>=0 ? "Yes" : "No",
+    notes: data.notes||"",
+  };
+  try{ fetch(FAT_TRAP_WEBHOOK, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify(body)}); }
+  catch(e){ console.warn("fat trap mirror failed:", e&&e.message); }
+}
 async function submitForm(def){
   const {data,errs}=collect(def);
   const errBox=$("#formerr");
@@ -972,6 +1004,7 @@ async function submitForm(def){
     await db.collection("staff_submissions").add(payload);
     try{ await upsertDailyStatus(def, data, alertUnits); }catch(e){ console.warn("daily_status:", e&&e.message); }
     try{ await upsertMonthlyStatus(def, data); }catch(e){ console.warn("monthly_status:", e&&e.message); }
+    try{ mirrorToSheet(def, data, payload); }catch(e){ console.warn("sheet mirror:", e&&e.message); }
     viewSuccess(def);
   }catch(err){
     console.error(err);
@@ -1035,6 +1068,7 @@ const HUBS=[
   }},
   {key:'report', title:'Report / Log', desc:'Accidents, cleans, wastage', icon:'report', sites:{
     Brighton:[
+      {label:'Fat Trap Report', route:'#/form/fat_trap'},
       {label:'Accident / Incident', route:'#/form/accident'},
       {label:'Deep Cleans', route:'#/form/deep_cleans'},
       {label:'Upload Training Certificate', route:'#/form/staff_training'},
@@ -1083,6 +1117,10 @@ function viewHome(){
     h += `<button class="hub-tile${hub.gold?' gold':''}${hub.wide?' wide':''}" onclick="location.hash='${to}'">
       ${hubIcon(hub.icon)}<div class="hub-txt"><div class="hub-t">${esc(hub.title)}</div><div class="hub-d">${esc(hub.desc)}</div></div></button>`;
   });
+  if(me && me.position==='kitchen_porter'){
+    h += `<button class="hub-tile gold wide" onclick="location.hash='#/form/fat_trap'">
+      ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Fat Trap Report</div><div class="hub-d">Your daily report - tap to fill it in</div></div></button>`;
+  }
   if(roleAtLeast('supervisor')){
     h += `<button class="hub-tile wide" onclick="location.hash='#/formcheck'">
       ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Management Hub <span id="fcBadge" class="fc-badge" style="display:none"></span></div><div class="hub-d">Checks, temps & wastage</div></div></button>`;
@@ -1564,9 +1602,10 @@ function viewEH(){
   shell(h);
 }
 
-let _recUnsub=null,_recSubs=null,_recType=null;
+let _recUnsub=null,_recSubs=null,_recType=null,_recDaysShown=7;
 function viewRecords(type){
   _recType=type;
+  _recDaysShown=7;
   let h=backbar("Environmental Health","#/eh");
   h+=`<h1 class="page">${esc(recTitle(type))}</h1><p class="sub">${esc(store.site)}</p>`;
   h+=`<div id="recBody"><div class="spinner"></div></div>`;
@@ -1584,7 +1623,7 @@ function recSummary(s){
   const d=s.data||{};
   if(s.formType==="deep_cleans"&&d.deep_cleaned) return "Cleaned: "+d.deep_cleaned;
   if(s.formType==="four_weekly") return d.observed_problem_or_repeat==="Yes"?"Issue noted in review":"Reviewed, no issues";
-  if(s.formType==="fat_trap") return d.completed||d.notes||"";
+  if(s.formType==="fat_trap"){ const c=Array.isArray(d.completed)?d.completed.join(", "):(d.completed||""); return c||d.notes||"Logged"; }
   if(s.formType==="kitchen_logs") return (d.photos&&d.photos.length? (d.photos.length+" photo"+(d.photos.length>1?"s":"")) : "Logged")+(d.notes?(" · "+d.notes):"");
   if(s.formType==="staff_training") return d.course||"Training certificate";
   if(d.temps&&typeof d.temps==="object"){
@@ -1605,7 +1644,14 @@ function renderRecords(){
     }
     return;
   }
-  b.innerHTML=_recSubs.slice(0,300).map(s=>{
+  // Rolling date window: show records from the last _recDaysShown days, oldest boundary moving back.
+  const nowSec=Date.now()/1000;
+  const cutoff=nowSec-(_recDaysShown*86400);
+  const shown=_recSubs.filter(s=>tsOf(s)>=cutoff);
+  const older=_recSubs.length-shown.length;
+  // If everything within the window is empty but older records exist, still reveal the button so nothing is hidden.
+  const list=shown.length?shown:_recSubs.slice(0,0);
+  let html=list.map(s=>{
     const alert=subHasAlert(s); const flag=alert?`<span class="bad-badge">temp alert</span>`:"";
     const sum=recSummary(s);
     return `<div class="sub-card${alert?' alert':''}" onclick="window._openRec('${s.id}')">
@@ -1613,7 +1659,15 @@ function renderRecords(){
       ${sum?`<div class="rec-sum">${esc(sum)}</div>`:""}
     </div>`;
   }).join("");
+  if(!shown.length){
+    html=`<p class="muted">No records in the last ${_recDaysShown} days for ${esc(store.site)}.</p>`;
+  }
+  if(older>0){
+    html+=`<button class="load-more" onclick="window._recShowOlder()">Show older records (${older} more)</button>`;
+  }
+  b.innerHTML=html;
 }
+window._recShowOlder=function(){ _recDaysShown+=7; renderRecords(); };
 window._openRec=function(id){ const s=_recSubs.find(x=>x.id===id); if(s) renderSubDetail(s, "#/records/"+_recType); };
 
 /* =========================================================
