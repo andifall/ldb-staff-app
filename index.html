@@ -326,7 +326,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04m";
+const BUILD = "2026.08.04n";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -346,7 +346,7 @@ var me = loadIdentity();   // {staffId, name, position, store}
    Owner unlocks in-app editing of order lists, forms, reference docs and the
    addresses each order emails to. Per Simon's choice it is tied to the staff
    identity name (no separate sign-in). Extend OWNER_NAMES if ever needed. */
-var OWNER_NAMES = ["simon dean"];
+var OWNER_NAMES = ["simon dean", "lianne fox"];
 function isOwner(){
   try{
     if(manager && manager.email==='simon@ldbrighton.com') return true;
