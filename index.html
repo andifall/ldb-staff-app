@@ -274,6 +274,10 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .bad-badge{display:inline-block;background:var(--danger-bg);color:var(--danger);font-family:var(--head);font-size:10px;font-weight:600;padding:3px 9px;border-radius:999px;margin-left:6px;text-transform:uppercase;letter-spacing:.05em}
   footer.made{padding:24px;text-align:center;color:var(--bark40);font-family:var(--head);text-transform:uppercase;letter-spacing:.1em;font-size:10px}
+  .pinkey{appearance:none;border:1px solid #E6DAC9;background:#fff;color:#3D2B1F;border-radius:16px;
+    font-size:26px;font-weight:700;padding:16px 0;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
+  .pinkey:active{background:#f4ece0;transform:translateY(1px);}
+  .pinpad{touch-action:manipulation;}
 </style>
 </head>
 <body>
@@ -326,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04q";
+const BUILD = "2026.08.04r";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -347,6 +351,7 @@ var me = loadIdentity();   // {staffId, name, position, store}
    addresses each order emails to. Per Simon's choice it is tied to the staff
    identity name (no separate sign-in). Extend OWNER_NAMES if ever needed. */
 var OWNER_NAMES = ["simon dean", "lianne fox"];
+var PROXY = "https://laughing-dog-proxy.onrender.com";
 function isOwner(){
   try{
     if(manager && manager.email==='simon@ldbrighton.com') return true;
@@ -357,7 +362,9 @@ function isOwner(){
 }
 let staffDocUnsub=null;
 function watchMyStaffDoc(){
-  if(!fbReady || !me || !me.staffId || staffDocUnsub) return;
+  // PIN-login identities resolve against the admin-only staffPins (via the proxy),
+  // not the public 'staff' rota collection, so there's no staff/{id} doc to watch.
+  if(!fbReady || !me || me.viaPin || !me.staffId || staffDocUnsub) return;
   staffDocUnsub = db.collection("staff").doc(me.staffId).onSnapshot(function(d){
     if(!d.exists){ me=null; try{ localStorage.removeItem("ld_identity"); }catch(e){} try{staffDocUnsub();}catch(e){} staffDocUnsub=null; router(); return; }
     const x=d.data()||{}; let changed=false;
@@ -1190,39 +1197,73 @@ function viewSitePicker(){
 }
 window._setSite=function(s){ store.site=s; resetStatusSub(); subscribeRoleData(); location.hash="#/"; router(); };
 
-function viewIdentify(){
-  app.innerHTML = header() + `<div class="content"><div class="center">
-    <div class="picker-logo"><img src="${LOGO}" alt="Laughing Dog" style="height:46px;width:auto"></div>
-    <div class="big">Welcome</div>
-    <p class="sub">Tell us who you are. This saves on this phone so you're only asked once. If anything's ever wrong, a manager can change it for you.</p>
-    <div style="width:100%;max-width:360px;text-align:left;margin-top:6px">
-      <div class="field"><label class="q">Your name</label><input type="text" id="idName" placeholder="First and last name" autocomplete="name"></div>
-      <div class="field"><label class="q">Your position at Laughing Dog</label>
-        <select id="idPos" class="sel">${POSITIONS.map(p=>`<option value="${p[0]}">${p[1]}</option>`).join("")}</select></div>
-      <div id="idErr" class="err"></div>
-      <button class="pill" id="idBtn" style="width:100%">Continue</button>
-      <p class="muted" style="font-size:12px;text-align:center;margin-top:12px">Store: ${esc(store.site||"")} · <span onclick="location.hash='#/settings'" style="text-decoration:underline;cursor:pointer">change</span></p>
-    </div>
-  </div></div>`;
-  $("#idBtn").addEventListener("click", _saveIdentityFromForm);
-  $("#idName").addEventListener("keydown", e=>{ if(e.key==="Enter") _saveIdentityFromForm(); });
+/* ---------- PIN login (replaces name typing) ----------
+   Staff enter the same PIN as the till. It resolves server-side (proxy, Admin
+   SDK) against the admin-only staffPins and returns name + role + home store. */
+var _pinBuf = "";
+function _pinDotsHtml(){
+  var shown = _pinBuf.replace(/./g,'•');
+  return '<div id="pinDisp" style="font-size:30px;letter-spacing:10px;min-height:40px;font-weight:800;color:#3D2B1F;">'+(shown||'<span style="color:#cbb9a6">····</span>')+'</div>';
 }
-async function _saveIdentityFromForm(){
-  const name=$("#idName").value.trim(); const position=$("#idPos").value; const err=$("#idErr");
-  if(!name){ err.textContent="Please enter your name."; return; }
-  const btn=$("#idBtn"); btn.disabled=true; btn.textContent="Saving…";
-  let staffId=null;
-  if(fbReady){
-    try{
-      const ref=await db.collection("staff").add({ name, position, store:store.site, active:true,
-        createdAtLocal:new Date().toISOString(), createdAt:firebase.firestore.FieldValue.serverTimestamp() });
-      staffId=ref.id;
-    }catch(e){ console.warn("staff add:", e&&e.message); }
-  }
-  me={ staffId, name, position, store:store.site }; saveIdentity(me);
-  watchMyStaffDoc(); subscribeRoleData();
-  go("#/"); router();
+function viewPinLogin(){
+  var keys=['1','2','3','4','5','6','7','8','9','back','0','go'];
+  var pad=keys.map(function(k){
+    if(k==='back') return '<button class="pinkey" data-k="back" style="font-size:22px">⌫</button>';
+    if(k==='go') return '<button class="pinkey" data-k="go" style="background:#FFBE5C;color:#3D2B1F;font-weight:800">✓</button>';
+    return '<button class="pinkey" data-k="'+k+'">'+k+'</button>';
+  }).join('');
+  app.innerHTML = header() + '<div class="content"><div class="center">'
+    + '<div class="picker-logo"><img src="'+LOGO+'" alt="Laughing Dog" style="height:46px;width:auto"></div>'
+    + '<div class="big">Enter your PIN</div>'
+    + '<p class="sub">Use the same PIN as the till. A manager can set or reset it for you in the management panel.</p>'
+    + _pinDotsHtml()
+    + '<div id="pinErr" class="err" style="min-height:18px"></div>'
+    + '<div class="pinpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:300px;width:100%;margin:6px auto 0;">'+pad+'</div>'
+    + '</div></div>';
+  Array.prototype.forEach.call(document.querySelectorAll('.pinkey'), function(btn){
+    btn.addEventListener('click', function(){ _pinKey(btn.getAttribute('data-k')); });
+  });
 }
+function _pinKey(k){
+  var err=$("#pinErr"); if(err) err.textContent='';
+  if(k==='back'){ _pinBuf=_pinBuf.slice(0,-1); }
+  else if(k==='go'){ return _pinSubmit(); }
+  else if(_pinBuf.length<8){ _pinBuf+=k; }
+  var disp=$("#pinDisp"); if(disp){ var s=_pinBuf.replace(/./g,'•'); disp.innerHTML = s||'<span style="color:#cbb9a6">····</span>'; }
+}
+async function _pinSubmit(){
+  var err=$("#pinErr");
+  if(_pinBuf.length<2){ if(err) err.textContent='Enter your PIN.'; return; }
+  var pin=_pinBuf;
+  if(err){ err.style.color=''; err.textContent='Checking…'; }
+  try{
+    var r=await fetch(PROXY+'/staff-api/pin-login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pin:pin})});
+    var data=await r.json().catch(function(){ return {}; });
+    if(!r.ok){ _pinBuf=''; if(err) err.textContent = (data && data.error) || 'PIN not recognised.'; var d=$("#pinDisp"); if(d) d.innerHTML='<span style="color:#cbb9a6">····</span>'; return; }
+    var role=data.role||'barista';
+    var homeStore=(data.store && data.store!=='Both') ? data.store : '';
+    me={ staffId:data.id||null, name:data.name||'Staff', position:role, store:homeStore||store.site||'', viaPin:true };
+    saveIdentity(me);
+    if(homeStore){ store.site=homeStore; }
+    _pinBuf='';
+    subscribeRoleData();
+    if(!store.site){ return viewSitePicker(); }  // 'Both'/unset home store: ask which site
+    resetStatusSub();
+    go("#/"); router();
+  }catch(e){ if(err) err.textContent='No connection. Try again in a moment.'; }
+}
+
+// Staff now sign in with their PIN (see viewPinLogin). Kept as a thin alias so
+// any lingering references still resolve to the PIN screen.
+function viewIdentify(){ return viewPinLogin(); }
+// Sign the current staff member out of this device (shared till) so the next
+// person can enter their own PIN. Keeps the store selection.
+window._switchUser=function(){
+  me=null; _pinBuf='';
+  try{ localStorage.removeItem("ld_identity"); }catch(e){}
+  try{ if(staffDocUnsub){ staffDocUnsub(); staffDocUnsub=null; } }catch(e){}
+  go("#/"); viewPinLogin();
+};
 
 function viewSettings(){
   let h = backbar("Home","#/");
@@ -1233,7 +1274,8 @@ function viewSettings(){
         <div style="flex:1"><div style="font-weight:600">${esc(me.name)}</div>
           <div class="muted" style="font-size:13px">${esc(posLabel(me.position))} · ${esc(me.store||store.site||"")}</div></div>
       </div>
-      <div class="help" style="margin-top:8px">To change your name or position, ask a manager. They can update it in the editor and it'll refresh here automatically.</div></div>`;
+      <div class="btn-list" style="margin-top:8px"><button class="pill ghost" onclick="window._switchUser()">Switch user</button></div>
+      <div class="help" style="margin-top:8px">To change your name, role or PIN, ask a manager. They set it in the management panel and you'll see it next time you sign in.</div></div>`;
   }
   h += `<div class="field"><label class="q">Current store</label>
     <div class="btn-list">
@@ -3059,8 +3101,8 @@ function router(){
   if(root!=="records" && _recUnsub){ try{_recUnsub()}catch(e){} _recUnsub=null; }
   if(root!=="wastage" && _wasteTodayUnsub){ try{_wasteTodayUnsub()}catch(e){} _wasteTodayUnsub=null; }
   if(hash!=="#/edit/staff" && _ownerStaffUnsub){ try{_ownerStaffUnsub()}catch(e){} _ownerStaffUnsub=null; }
+  if(!me && hash!=="#/settings"){ return viewPinLogin(); }
   if(!store.site && hash!=="#/settings"){ return viewSitePicker(); }
-  if(store.site && !me && hash!=="#/settings"){ return viewIdentify(); }
   if(root===""||root===undefined) return viewHome();
   if(root==="settings") return viewSettings();
   if(root==="hub") return viewHub(parts[1]);
