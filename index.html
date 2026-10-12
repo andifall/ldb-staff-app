@@ -326,7 +326,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04o";
+const BUILD = "2026.08.04p";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2774,7 +2774,11 @@ async function submitWastage(){
 /* =========================================================
    BOOKINGS  (Brighton, Simon-only while testing)
    ========================================================= */
-function isSimon(){ return !!(manager && manager.email==='simon@ldbrighton.com'); }
+function isSimon(){
+  if(manager && manager.email==='simon@ldbrighton.com') return true;
+  if(me && (me.name||'').trim().toLowerCase()==='simon dean') return true;
+  return false;
+}
 function bkCanUse(){ return store.site==='Brighton' && isSimon(); }
 function bkTodayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function bkFmtDate(iso){ try{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return iso; } }
