@@ -326,7 +326,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04p";
+const BUILD = "2026.08.04q";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2779,10 +2779,83 @@ function isSimon(){
   if(me && (me.name||'').trim().toLowerCase()==='simon dean') return true;
   return false;
 }
-function bkCanUse(){ return store.site==='Brighton' && isSimon(); }
+// Bookings are live for every signed-in Brighton staff member. (Worthing has no
+// table bookings.) An email-management session also counts as being "in".
+function bkCanUse(){ return store.site==='Brighton' && (!!me || !!manager); }
 function bkTodayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function bkFmtDate(iso){ try{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return iso; } }
 function bkFmtTime(hhmm){ if(!hhmm) return ''; const p=hhmm.split(':'); let h=parseInt(p[0],10); const m=p[1]||'00'; const ap=h>=12?'pm':'am'; h=h%12; if(h===0)h=12; return m==='00'?(h+ap):(h+':'+m+ap); }
+
+// ----- Recurring bookings helpers -----
+var BK_REPEATS=[['none','Does not repeat'],['weekly','Every week'],['fortnightly','Every 2 weeks'],['4weekly','Every 4 weeks'],['monthly','Every month']];
+function bkRepeatLabel(r){ var f=BK_REPEATS.find(function(x){return x[0]===r;}); return f?f[1]:''; }
+function bkMkSeriesId(){ return 'ser_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function bkAddDays(iso,days){ var d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+days); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function bkAddMonths(iso,months){ var d=new Date(iso+'T00:00:00'); var day=d.getDate(); d.setMonth(d.getMonth()+months); if(d.getDate()<day){ d.setDate(0); } return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function bkIsWeekend(iso){ var g=new Date(iso+'T00:00:00').getDay(); return g===0||g===6; }
+function bkNextDate(iso,repeat){
+  if(repeat==='weekly') return bkAddDays(iso,7);
+  if(repeat==='fortnightly') return bkAddDays(iso,14);
+  if(repeat==='4weekly') return bkAddDays(iso,28);
+  if(repeat==='monthly') return bkAddMonths(iso,1);
+  return null;
+}
+// All occurrence dates for a series, starting AFTER `afterISO` (exclusive) up to
+// ~6 months from today. Weekend dates are skipped (weekdays only for now).
+function bkSeriesDates(startISO, repeat, afterISO){
+  var out=[], horizon=bkAddMonths(bkTodayISO(),6), cur=startISO, guard=0;
+  if(afterISO){ // extend mode: step forward until we're past afterISO
+    while(cur && cur<=afterISO && guard<400){ cur=bkNextDate(cur,repeat); guard++; }
+  }
+  while(cur && cur<=horizon && guard<400){
+    if(!bkIsWeekend(cur)) out.push(cur);
+    cur=bkNextDate(cur,repeat); guard++;
+  }
+  return out;
+}
+async function bkWriteSeries(baseFields, startISO, repeat){
+  var seriesId=bkMkSeriesId();
+  var dates=bkSeriesDates(startISO, repeat, null);
+  if(!dates.length) dates=[startISO];
+  var batch=db.batch();
+  dates.forEach(function(d){
+    var ref=db.collection('bookings').doc();
+    batch.set(ref, Object.assign({}, baseFields, { dateISO:d, seriesId:seriesId, repeat:repeat,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp() }));
+  });
+  await batch.commit();
+  return dates.length;
+}
+// Keep repeating series topped up ~6 months ahead. Called after the list loads.
+var _bkExtendBusy=false;
+async function bkAutoExtend(list){
+  if(_bkExtendBusy || !db) return;
+  var series={};
+  list.forEach(function(b){ if(b.seriesId && b.repeat && b.repeat!=='none'){ (series[b.seriesId]=series[b.seriesId]||{repeat:b.repeat, max:'', base:b}); if((b.dateISO||'')>series[b.seriesId].max){ series[b.seriesId].max=b.dateISO; series[b.seriesId].base=b; } } });
+  var softHorizon=bkAddMonths(bkTodayISO(),5);
+  var toAdd=[];
+  Object.keys(series).forEach(function(sid){
+    var s=series[sid];
+    if(s.max && s.max < softHorizon){
+      var more=bkSeriesDates(s.max, s.repeat, s.max); // dates strictly after current max
+      more.forEach(function(d){ toAdd.push({sid:sid, repeat:s.repeat, date:d, base:s.base}); });
+    }
+  });
+  if(!toAdd.length) return;
+  _bkExtendBusy=true;
+  try{
+    var batch=db.batch();
+    toAdd.slice(0,400).forEach(function(it){
+      var b=it.base;
+      var ref=db.collection('bookings').doc();
+      batch.set(ref, { site:'Brighton', dateISO:it.date, time:b.time||'', people:b.people||4,
+        name:b.name||'', phone:b.phone||'', email:b.email||'', notes:b.notes||'',
+        seriesId:it.sid, repeat:it.repeat, createdBy:b.createdBy||'',
+        createdAt:firebase.firestore.FieldValue.serverTimestamp(), updatedAt:firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    await batch.commit();
+  }catch(e){} finally{ _bkExtendBusy=false; }
+}
 
 let _bkUnsub=null, _bkTodayList=[];
 function startBookingsToday(){
@@ -2837,6 +2910,7 @@ function viewBookingsList(){
         .filter(function(b){ return (b.dateISO||'') >= bkTodayISO(); })
         .sort(function(a,b){ return a.dateISO===b.dateISO ? (a.time||'').localeCompare(b.time||'') : (a.dateISO||'').localeCompare(b.dateISO||''); });
       bkRenderList(list);
+      bkAutoExtend(list);
     }, function(err){ var b=$("#bkList"); if(b) b.innerHTML='<p class="err">Couldn\'t load: '+esc(err.message)+'</p>'; });
 }
 function bkRenderList(list){
@@ -2845,7 +2919,7 @@ function bkRenderList(list){
   b.innerHTML = list.map(function(bk){
     return '<div class="bk-row" data-id="'+bk.id+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #eee;border-radius:14px;padding:14px 16px;margin:8px 0;">'
       +'<div style="min-width:0;">'
-      +'<div style="font-weight:800;">'+esc(bkFmtDate(bk.dateISO))+' · '+esc(bkFmtTime(bk.time))+'</div>'
+      +'<div style="font-weight:800;">'+esc(bkFmtDate(bk.dateISO))+' · '+esc(bkFmtTime(bk.time))+(bk.seriesId&&bk.repeat&&bk.repeat!=='none'?' <span style="font-weight:700;font-size:11px;color:#8a6d3b;background:#fbeecf;padding:2px 7px;border-radius:10px;vertical-align:middle;">↻ '+esc(bkRepeatLabel(bk.repeat))+'</span>':'')+'</div>'
       +'<div style="font-size:14px;margin-top:2px;">'+bk.people+' people · '+esc(bk.name||'')+'</div>'
       +'<div style="font-size:12px;color:#888;margin-top:2px;">'+(bk.phone?esc(bk.phone):'')+(bk.email?(' · '+esc(bk.email)):'')+'</div>'
       +(bk.notes?('<div style="font-size:12px;color:#aaa;margin-top:2px;">'+esc(bk.notes)+'</div>'):'')
@@ -2870,12 +2944,27 @@ function bkAttachLongPress(el, cb){
 }
 window._bkDelete=async function(id, ev){
   if(ev){ ev.stopPropagation(); }
-  if(!confirm('Delete this booking?')) return;
-  try{ await db.collection('bookings').doc(id).delete(); toast('Booking deleted'); }
-  catch(e){ alert('Could not delete: '+e.message); }
+  try{
+    var doc=await db.collection('bookings').doc(id).get();
+    var sid=doc.exists ? (doc.data().seriesId||null) : null;
+    if(sid){
+      var whole=confirm('This is a repeating booking.\n\nOK = delete the WHOLE series (all future dates).\nCancel = delete only THIS booking.');
+      if(whole){
+        var snap=await db.collection('bookings').where('seriesId','==',sid).get();
+        var batch=db.batch(); var today=bkTodayISO();
+        snap.docs.forEach(function(d){ if((d.data().dateISO||'')>=today){ batch.delete(d.ref); } });
+        await batch.commit(); toast('Series deleted'); return;
+      }
+      // fall through to single delete
+      if(!confirm('Delete just this one booking?')) return;
+    } else {
+      if(!confirm('Delete this booking?')) return;
+    }
+    await db.collection('bookings').doc(id).delete(); toast('Booking deleted');
+  }catch(e){ alert('Could not delete: '+e.message); }
 };
 
-let _bkEditing=null;
+let _bkEditing=null, _bkEditSeriesId=null;
 function viewBookingForm(id){
   if(!bkCanUse()) return viewHome();
   _bkEditing = id || null;
@@ -2889,10 +2978,21 @@ function viewBookingForm(id){
   h+='<div class="field"><label class="q">Phone</label><input type="tel" id="bkPhone" placeholder="Required"></div>';
   h+='<div class="field"><label class="q">Email (optional)</label><input type="email" id="bkEmail" placeholder="Optional"></div>';
   h+='<div class="field"><label class="q">Notes (optional)</label><textarea id="bkNotes" rows="3" placeholder="Anything to note"></textarea></div>';
+  if(!id){
+    var repOpts=BK_REPEATS.map(function(r){ return '<option value="'+r[0]+'">'+esc(r[1])+'</option>'; }).join('');
+    h+='<div class="field"><label class="q">Repeat</label><select id="bkRepeat">'+repOpts+'</select></div>';
+    h+='<div id="bkRepeatHint" class="muted" style="font-size:12px;margin:-6px 0 10px"></div>';
+  } else {
+    h+='<div id="bkSeriesNote" class="muted" style="font-size:12px;margin:-2px 0 10px"></div>';
+  }
   h+='<div id="bkErr" class="err"></div>';
   h+='<button class="pill cta" id="bkSave">'+(id?'Save changes':'Create booking')+'</button>';
   shell(h);
   $("#bkSave").addEventListener('click', bkSave);
+  if(!id && $("#bkRepeat")){
+    var upd=function(){ var r=$("#bkRepeat").value; $("#bkRepeatHint").textContent = (r && r!=='none') ? ('Creates this booking and its repeats for the next 6 months (weekdays only).') : ''; };
+    $("#bkRepeat").addEventListener('change', upd); upd();
+  }
   if(id){
     db.collection('bookings').doc(id).get().then(function(doc){
       if(!doc.exists) return; var d=doc.data();
@@ -2903,6 +3003,8 @@ function viewBookingForm(id){
       if($("#bkPhone")) $("#bkPhone").value=d.phone||'';
       if($("#bkEmail")) $("#bkEmail").value=d.email||'';
       if($("#bkNotes")) $("#bkNotes").value=d.notes||'';
+      _bkEditSeriesId = d.seriesId || null;
+      if($("#bkSeriesNote") && d.seriesId){ $("#bkSeriesNote").textContent = 'Part of a repeating booking ('+bkRepeatLabel(d.repeat)+'). You can choose to change just this one or the whole series when you save.'; }
     });
   }
 }
@@ -2917,12 +3019,33 @@ async function bkSave(){
   if(!name){ err.textContent='Enter a name'; return; }
   if(!phone){ err.textContent='A phone number is required'; return; }
   if(!(people>=4 && people<=12)){ err.textContent='Party size must be 4 to 12'; return; }
-  var payload={ site:'Brighton', dateISO:dateISO, time:time, people:people, name:name, phone:phone, email:email, notes:notes,
-    updatedAt:firebase.firestore.FieldValue.serverTimestamp(), createdBy:(manager&&manager.email)||'' };
+  var who=(manager&&manager.email)||(me&&me.name)||'';
+  var shared={ time:time, people:people, name:name, phone:phone, email:email, notes:notes,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp() };
   var btn=$("#bkSave"); btn.disabled=true; btn.textContent='Saving...';
   try{
-    if(_bkEditing){ await db.collection('bookings').doc(_bkEditing).update(payload); }
-    else { payload.createdAt=firebase.firestore.FieldValue.serverTimestamp(); await db.collection('bookings').add(payload); }
+    if(_bkEditing){
+      // Editing an existing booking. If it belongs to a repeating series, ask scope.
+      if(_bkEditSeriesId && confirm('This is a repeating booking.\n\nOK = change the WHOLE series (all future dates).\nCancel = change only THIS booking.')){
+        var snap=await db.collection('bookings').where('seriesId','==',_bkEditSeriesId).get();
+        var batch=db.batch(); var today=bkTodayISO();
+        snap.docs.forEach(function(d){ if((d.data().dateISO||'')>=today){ batch.update(d.ref, shared); } });
+        await batch.commit();
+      } else {
+        // Single edit: date can be changed too (detaches nothing; just this doc).
+        await db.collection('bookings').doc(_bkEditing).update(Object.assign({dateISO:dateISO}, shared));
+      }
+    } else {
+      var repeat = ($("#bkRepeat") && $("#bkRepeat").value) || 'none';
+      var base=Object.assign({ site:'Brighton', dateISO:dateISO, createdBy:who }, shared);
+      if(repeat && repeat!=='none'){
+        var n=await bkWriteSeries(Object.assign({site:'Brighton', createdBy:who, time:time, people:people, name:name, phone:phone, email:email, notes:notes}), dateISO, repeat);
+        toast(n>1 ? ('Created '+n+' repeating bookings') : 'Booking saved');
+        location.hash='#/bookings/list'; return;
+      }
+      base.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('bookings').add(base);
+    }
     toast('Booking saved'); location.hash='#/bookings/list';
   }catch(e){ err.textContent='Could not save: '+(e.message||e); btn.disabled=false; btn.textContent=_bkEditing?'Save changes':'Create booking'; }
 }
