@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04s";
+const BUILD = "2026.08.04t";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1109,7 +1109,7 @@ const HUBS=[
     {label:'Staff Training', route:'#/doc/training'},
     {label:'Alcohol License Checklist', route:'#/form/alcohol'},
   ]},
-  {key:'bookings', title:'Bookings', desc:'Table bookings for 4+ (Brighton)', icon:'records', route:'#/bookings', wide:true, bk:true},
+  {key:'bookings', title:'Bookings', desc:'Table bookings for 2+ (Brighton)', icon:'records', route:'#/bookings', wide:true, bk:true},
   {key:'eh', title:'Environmental Health', desc:'Completed records & food-safety documents', icon:'records', route:'#/eh', wide:true},
 ];
 function hubIcon(name){ return `<span class="hub-ic">${ICONS[name]||''}</span>`; }
@@ -2933,7 +2933,7 @@ function renderSodBookings(){
 function viewBookingsMenu(){
   if(!bkCanUse()) return viewHome();
   var h=backbar("Home","#/");
-  h+='<h1 class="page">Bookings</h1><p class="sub">Brighton · tables for 4 or more</p>';
+  h+='<h1 class="page">Bookings</h1><p class="sub">Brighton · tables for 2 or more</p>';
   h+='<div class="rowlist">'+rowItem("See bookings","#/bookings/list")+rowItem("Create booking","#/bookings/new")+'</div>';
   shell(h);
 }
@@ -3010,7 +3010,7 @@ let _bkEditing=null, _bkEditSeriesId=null;
 function viewBookingForm(id){
   if(!bkCanUse()) return viewHome();
   _bkEditing = id || null;
-  var peopleOpts=''; for(var n=4;n<=12;n++){ peopleOpts+='<option value="'+n+'">'+n+'</option>'; }
+  var peopleOpts=''; for(var n=2;n<=12;n++){ peopleOpts+='<option value="'+n+'">'+n+'</option>'; }
   var h=backbar("Bookings","#/bookings");
   h+='<h1 class="page">'+(id?'Edit booking':'New booking')+'</h1>';
   h+='<div class="field"><label class="q">Date</label><input type="date" id="bkDate" min="'+bkTodayISO()+'"></div>';
@@ -3060,7 +3060,7 @@ async function bkSave(){
   if(!time){ err.textContent='Pick a time'; return; }
   if(!name){ err.textContent='Enter a name'; return; }
   if(!phone){ err.textContent='A phone number is required'; return; }
-  if(!(people>=4 && people<=12)){ err.textContent='Party size must be 4 to 12'; return; }
+  if(!(people>=2 && people<=12)){ err.textContent='Party size must be 2 to 12'; return; }
   var who=(manager&&manager.email)||(me&&me.name)||'';
   var shared={ time:time, people:people, name:name, phone:phone, email:email, notes:notes,
     updatedAt:firebase.firestore.FieldValue.serverTimestamp() };
