@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04t";
+const BUILD = "2026.08.04u";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2828,6 +2828,11 @@ function bkTodayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.g
 function bkFmtDate(iso){ try{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return iso; } }
 function bkFmtTime(hhmm){ if(!hhmm) return ''; const p=hhmm.split(':'); let h=parseInt(p[0],10); const m=p[1]||'00'; const ap=h>=12?'pm':'am'; h=h%12; if(h===0)h=12; return m==='00'?(h+ap):(h+':'+m+ap); }
 
+// Time slots: 15-minute steps across opening hours (no odd times like 12:17).
+function bkTimeSlots(){ var out=[]; for(var h=9;h<=16;h++){ for(var m=0;m<60;m+=15){ if(h===16&&m>0) break; out.push(String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')); } } return out; }
+function bkTimeOptions(sel){ return '<option value="">Choose a time</option>'+bkTimeSlots().map(function(t){ return '<option value="'+t+'"'+(t===sel?' selected':'')+'>'+bkFmtTime(t)+'</option>'; }).join(''); }
+function bkNowHHMM(){ var d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
 // ----- Recurring bookings helpers -----
 var BK_REPEATS=[['none','Does not repeat'],['weekly','Every week'],['fortnightly','Every 2 weeks'],['4weekly','Every 4 weeks'],['monthly','Every month']];
 function bkRepeatLabel(r){ var f=BK_REPEATS.find(function(x){return x[0]===r;}); return f?f[1]:''; }
@@ -3014,7 +3019,7 @@ function viewBookingForm(id){
   var h=backbar("Bookings","#/bookings");
   h+='<h1 class="page">'+(id?'Edit booking':'New booking')+'</h1>';
   h+='<div class="field"><label class="q">Date</label><input type="date" id="bkDate" min="'+bkTodayISO()+'"></div>';
-  h+='<div class="field"><label class="q">Time</label><input type="time" id="bkTime"></div>';
+  h+='<div class="field"><label class="q">Time</label><select id="bkTime">'+bkTimeOptions('')+'</select></div>';
   h+='<div class="field"><label class="q">People</label><select id="bkPeople">'+peopleOpts+'</select></div>';
   h+='<div class="field"><label class="q">Name</label><input type="text" id="bkName" placeholder="Customer name"></div>';
   h+='<div class="field"><label class="q">Phone</label><input type="tel" id="bkPhone" placeholder="Required"></div>';
@@ -3055,9 +3060,12 @@ async function bkSave(){
   var name=$("#bkName").value.trim(), phone=$("#bkPhone").value.trim(), email=$("#bkEmail").value.trim(), notes=$("#bkNotes").value.trim();
   var err=$("#bkErr");
   if(!dateISO){ err.textContent='Pick a date'; return; }
+  if(dateISO < bkTodayISO()){ err.textContent="You can't book a date in the past."; return; }
   var dow=new Date(dateISO+'T00:00:00').getDay();
   if(dow===0||dow===6){ err.textContent='Bookings are weekdays only for now.'; return; }
   if(!time){ err.textContent='Pick a time'; return; }
+  if(!/^\d\d:(00|15|30|45)$/.test(time)){ err.textContent='Times must be in 15-minute steps.'; return; }
+  if(dateISO===bkTodayISO() && time <= bkNowHHMM()){ err.textContent="That time has already passed today. Pick a later time."; return; }
   if(!name){ err.textContent='Enter a name'; return; }
   if(!phone){ err.textContent='A phone number is required'; return; }
   if(!(people>=2 && people<=12)){ err.textContent='Party size must be 2 to 12'; return; }
