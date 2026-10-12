@@ -921,6 +921,7 @@ function viewForm(formType){
   if(isOwner() && FORMS[formType]) html += `<div class="own-edit-row"><button class="own-edit-btn" onclick="window._nav('#/edit/form/${encodeURIComponent(formType)}')">✎ Edit this form (${esc(site||"")})</button></div>`;
   if(def.unverified) html += `<div class="note-box">⚠️ ${esc(def.intro)}</div>`;
   else if(def.intro) html += `<div class="note-box">${esc(def.intro)}</div>`;
+  if(formType==='start_of_day' && bkCanUse()) html += `<div id="bkSod" style="margin:4px 0 18px"></div>`;
   html += `<form id="theform" onsubmit="return false">`;
   if(me) html += `<div class="note-box" style="background:var(--sage-bg);color:var(--sage-tx)">Filling in as <b>${esc(me.name)}</b>. Your name is added automatically.</div>`;
   html += formFields(def).map(renderField).join("");
@@ -928,6 +929,7 @@ function viewForm(formType){
   html += `<button class="pill cta submit" id="submitBtn">Submit</button></form>`;
   shell(html);
   initSigs();
+  if(formType==='start_of_day' && bkCanUse()){ startBookingsToday(); renderSodBookings(); }
   $("#submitBtn").addEventListener("click", ()=>submitForm(def));
 }
 
@@ -1100,6 +1102,7 @@ const HUBS=[
     {label:'Staff Training', route:'#/doc/training'},
     {label:'Alcohol License Checklist', route:'#/form/alcohol'},
   ]},
+  {key:'bookings', title:'Bookings', desc:'Table bookings for 4+ (Brighton)', icon:'records', route:'#/bookings', wide:true, bk:true},
   {key:'eh', title:'Environmental Health', desc:'Completed records & food-safety documents', icon:'records', route:'#/eh', wide:true},
 ];
 function hubIcon(name){ return `<span class="hub-ic">${ICONS[name]||''}</span>`; }
@@ -1111,8 +1114,10 @@ function rowItem(label,route,ext){
 function viewHome(){
   if(!store.site){ return viewSitePicker(); }
   let h = `<p class="eyebrow">${esc(store.site)}</p><h1 class="page">Staff Hub</h1><p class="sub">Everything you need for your shift. Tap a section to open it.</p>`;
+  if(bkCanUse()){ startBookingsToday(); h += bkTodayStripsHtml(); }
   h += `<div class="hub-grid">`;
   HUBS.forEach(hub=>{
+    if(hub.bk && !bkCanUse()) return;
     const to = hub.route || ('#/hub/'+hub.key);
     h += `<button class="hub-tile${hub.gold?' gold':''}${hub.wide?' wide':''}" onclick="location.hash='${to}'">
       ${hubIcon(hub.icon)}<div class="hub-txt"><div class="hub-t">${esc(hub.title)}</div><div class="hub-d">${esc(hub.desc)}</div></div></button>`;
@@ -2766,6 +2771,158 @@ async function submitWastage(){
 /* =========================================================
    ROUTER
    ========================================================= */
+/* =========================================================
+   BOOKINGS  (Brighton, Simon-only while testing)
+   ========================================================= */
+function isSimon(){ return !!(manager && manager.email==='simon@ldbrighton.com'); }
+function bkCanUse(){ return store.site==='Brighton' && isSimon(); }
+function bkTodayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function bkFmtDate(iso){ try{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return iso; } }
+function bkFmtTime(hhmm){ if(!hhmm) return ''; const p=hhmm.split(':'); let h=parseInt(p[0],10); const m=p[1]||'00'; const ap=h>=12?'pm':'am'; h=h%12; if(h===0)h=12; return m==='00'?(h+ap):(h+':'+m+ap); }
+
+let _bkUnsub=null, _bkTodayList=[];
+function startBookingsToday(){
+  if(_bkUnsub || !db) return;
+  _bkUnsub = db.collection('bookings').where('site','==','Brighton')
+    .onSnapshot(function(snap){
+      _bkTodayList = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
+        .filter(function(b){ return b.dateISO===bkTodayISO(); })
+        .sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+      if(location.hash==='#/' || location.hash===''){ viewHome(); }
+      if($("#bkSod")) renderSodBookings();
+    }, function(){});
+}
+function bkTodayStripsHtml(){
+  if(!_bkTodayList.length) return '';
+  return _bkTodayList.map(function(b){
+    var call = b.phone ? ('<a href="tel:'+esc(b.phone)+'" style="background:#FFBE5C;color:#111;text-decoration:none;font-weight:800;padding:6px 14px;border-radius:20px;font-size:13px;white-space:nowrap;">Call</a>') : '';
+    return '<div style="background:#000;color:#fff;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,.25);">'
+      +'<div style="min-width:0;"><div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#FFBE5C;">BOOKING TODAY</div>'
+      +'<div style="font-weight:800;font-size:16px;margin-top:2px;">'+b.people+' people · '+esc(bkFmtTime(b.time))+' · '+esc(b.name||'')+'</div>'
+      +(b.notes?('<div style="font-size:12px;color:#bbb;margin-top:2px;">'+esc(b.notes)+'</div>'):'')+'</div>'
+      + call + '</div>';
+  }).join('');
+}
+function renderSodBookings(){
+  var el=$("#bkSod"); if(!el) return;
+  if(!_bkUnsub) startBookingsToday();
+  el.innerHTML = _bkTodayList.length
+    ? ('<div style="font-weight:800;margin:4px 0 8px;">Today\'s bookings</div>' + bkTodayStripsHtml())
+    : '<div class="note-box">No table bookings today.</div>';
+}
+
+function viewBookingsMenu(){
+  if(!bkCanUse()) return viewHome();
+  var h=backbar("Home","#/");
+  h+='<h1 class="page">Bookings</h1><p class="sub">Brighton · tables for 4 or more</p>';
+  h+='<div class="rowlist">'+rowItem("See bookings","#/bookings/list")+rowItem("Create booking","#/bookings/new")+'</div>';
+  shell(h);
+}
+
+let _bkListUnsub=null;
+function viewBookingsList(){
+  if(!bkCanUse()) return viewHome();
+  var h=backbar("Bookings","#/bookings");
+  h+='<h1 class="page">Upcoming bookings</h1><p class="sub">Touch and hold a booking to edit. Tap the bin to delete.</p>';
+  h+='<div id="bkList"><div class="spinner"></div></div>';
+  shell(h);
+  if(_bkListUnsub){ try{_bkListUnsub()}catch(e){} }
+  _bkListUnsub = db.collection('bookings').where('site','==','Brighton')
+    .onSnapshot(function(snap){
+      var list=snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
+        .filter(function(b){ return (b.dateISO||'') >= bkTodayISO(); })
+        .sort(function(a,b){ return a.dateISO===b.dateISO ? (a.time||'').localeCompare(b.time||'') : (a.dateISO||'').localeCompare(b.dateISO||''); });
+      bkRenderList(list);
+    }, function(err){ var b=$("#bkList"); if(b) b.innerHTML='<p class="err">Couldn\'t load: '+esc(err.message)+'</p>'; });
+}
+function bkRenderList(list){
+  var b=$("#bkList"); if(!b) return;
+  if(!list.length){ b.innerHTML='<p class="muted">No upcoming bookings.</p>'; return; }
+  b.innerHTML = list.map(function(bk){
+    return '<div class="bk-row" data-id="'+bk.id+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #eee;border-radius:14px;padding:14px 16px;margin:8px 0;">'
+      +'<div style="min-width:0;">'
+      +'<div style="font-weight:800;">'+esc(bkFmtDate(bk.dateISO))+' · '+esc(bkFmtTime(bk.time))+'</div>'
+      +'<div style="font-size:14px;margin-top:2px;">'+bk.people+' people · '+esc(bk.name||'')+'</div>'
+      +'<div style="font-size:12px;color:#888;margin-top:2px;">'+(bk.phone?esc(bk.phone):'')+(bk.email?(' · '+esc(bk.email)):'')+'</div>'
+      +(bk.notes?('<div style="font-size:12px;color:#aaa;margin-top:2px;">'+esc(bk.notes)+'</div>'):'')
+      +'</div>'
+      +'<button onclick="window._bkDelete(\''+bk.id+'\',event)" style="background:none;border:none;font-size:20px;cursor:pointer;">🗑️</button>'
+      +'</div>';
+  }).join('');
+  Array.prototype.forEach.call(b.querySelectorAll('.bk-row'), function(row){
+    bkAttachLongPress(row, function(){ location.hash='#/bookings/edit/'+row.getAttribute('data-id'); });
+  });
+}
+function bkAttachLongPress(el, cb){
+  var t=null;
+  function start(){ t=setTimeout(function(){ t=null; cb(); }, 550); }
+  function cancel(){ if(t){ clearTimeout(t); t=null; } }
+  el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchmove', cancel);
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', cancel);
+  el.addEventListener('mouseleave', cancel);
+}
+window._bkDelete=async function(id, ev){
+  if(ev){ ev.stopPropagation(); }
+  if(!confirm('Delete this booking?')) return;
+  try{ await db.collection('bookings').doc(id).delete(); toast('Booking deleted'); }
+  catch(e){ alert('Could not delete: '+e.message); }
+};
+
+let _bkEditing=null;
+function viewBookingForm(id){
+  if(!bkCanUse()) return viewHome();
+  _bkEditing = id || null;
+  var peopleOpts=''; for(var n=4;n<=12;n++){ peopleOpts+='<option value="'+n+'">'+n+'</option>'; }
+  var h=backbar("Bookings","#/bookings");
+  h+='<h1 class="page">'+(id?'Edit booking':'New booking')+'</h1>';
+  h+='<div class="field"><label class="q">Date</label><input type="date" id="bkDate" min="'+bkTodayISO()+'"></div>';
+  h+='<div class="field"><label class="q">Time</label><input type="time" id="bkTime"></div>';
+  h+='<div class="field"><label class="q">People</label><select id="bkPeople">'+peopleOpts+'</select></div>';
+  h+='<div class="field"><label class="q">Name</label><input type="text" id="bkName" placeholder="Customer name"></div>';
+  h+='<div class="field"><label class="q">Phone</label><input type="tel" id="bkPhone" placeholder="Required"></div>';
+  h+='<div class="field"><label class="q">Email (optional)</label><input type="email" id="bkEmail" placeholder="Optional"></div>';
+  h+='<div class="field"><label class="q">Notes (optional)</label><textarea id="bkNotes" rows="3" placeholder="Anything to note"></textarea></div>';
+  h+='<div id="bkErr" class="err"></div>';
+  h+='<button class="pill cta" id="bkSave">'+(id?'Save changes':'Create booking')+'</button>';
+  shell(h);
+  $("#bkSave").addEventListener('click', bkSave);
+  if(id){
+    db.collection('bookings').doc(id).get().then(function(doc){
+      if(!doc.exists) return; var d=doc.data();
+      if($("#bkDate")) $("#bkDate").value=d.dateISO||'';
+      if($("#bkTime")) $("#bkTime").value=d.time||'';
+      if($("#bkPeople")) $("#bkPeople").value=String(d.people||4);
+      if($("#bkName")) $("#bkName").value=d.name||'';
+      if($("#bkPhone")) $("#bkPhone").value=d.phone||'';
+      if($("#bkEmail")) $("#bkEmail").value=d.email||'';
+      if($("#bkNotes")) $("#bkNotes").value=d.notes||'';
+    });
+  }
+}
+async function bkSave(){
+  var dateISO=$("#bkDate").value, time=$("#bkTime").value, people=parseInt($("#bkPeople").value,10);
+  var name=$("#bkName").value.trim(), phone=$("#bkPhone").value.trim(), email=$("#bkEmail").value.trim(), notes=$("#bkNotes").value.trim();
+  var err=$("#bkErr");
+  if(!dateISO){ err.textContent='Pick a date'; return; }
+  var dow=new Date(dateISO+'T00:00:00').getDay();
+  if(dow===0||dow===6){ err.textContent='Bookings are weekdays only for now.'; return; }
+  if(!time){ err.textContent='Pick a time'; return; }
+  if(!name){ err.textContent='Enter a name'; return; }
+  if(!phone){ err.textContent='A phone number is required'; return; }
+  if(!(people>=4 && people<=12)){ err.textContent='Party size must be 4 to 12'; return; }
+  var payload={ site:'Brighton', dateISO:dateISO, time:time, people:people, name:name, phone:phone, email:email, notes:notes,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp(), createdBy:(manager&&manager.email)||'' };
+  var btn=$("#bkSave"); btn.disabled=true; btn.textContent='Saving...';
+  try{
+    if(_bkEditing){ await db.collection('bookings').doc(_bkEditing).update(payload); }
+    else { payload.createdAt=firebase.firestore.FieldValue.serverTimestamp(); await db.collection('bookings').add(payload); }
+    toast('Booking saved'); location.hash='#/bookings/list';
+  }catch(e){ err.textContent='Could not save: '+(e.message||e); btn.disabled=false; btn.textContent=_bkEditing?'Save changes':'Create booking'; }
+}
+
 function router(){
   const hash=location.hash||"#/";
   const parts=hash.replace(/^#\//,"").split("/");
@@ -2806,6 +2963,13 @@ function router(){
   if(root==="manage") return viewManage();
   if(root==="form") return viewForm(parts[1]);
   if(root==="doc") return viewDoc(parts[1]);
+  if(root==="bookings"){
+    if(!bkCanUse()) return viewHome();
+    if(parts[1]==="list") return viewBookingsList();
+    if(parts[1]==="new") return viewBookingForm(null);
+    if(parts[1]==="edit") return viewBookingForm(decodeURIComponent(parts[2]||""));
+    return viewBookingsMenu();
+  }
   return viewHome();
 }
 window.addEventListener("hashchange",router);
