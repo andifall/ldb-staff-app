@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.08.04v";
+const BUILD = "2026.10.13v";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -370,6 +370,10 @@ function isOwner(){
   }catch(e){}
   return false;
 }
+// Any signed-in manager (Simon / Brighton / Worthing) may edit the FORMS - they
+// are already a Firebase admin, so Firestore accepts their saves. The order
+// lists, reference docs, staff and email recipients stay owner-only.
+function canEditForms(){ return isOwner() || !!manager; }
 let staffDocUnsub=null;
 function watchMyStaffDoc(){
   // PIN-login identities resolve against the admin-only staffPins (via the proxy),
@@ -935,7 +939,7 @@ function viewForm(formType){
   const back = (def.management && manager) ? "#/mgmt" : "#/";
   let html = backbar((def.management && manager)?"Management":"Home", back);
   html += `<h1 class="page">${esc(def.title)}</h1><p class="sub">${esc(site||"")}</p>`;
-  if(isOwner() && FORMS[formType]) html += `<div class="own-edit-row"><button class="own-edit-btn" onclick="window._nav('#/edit/form/${encodeURIComponent(formType)}')">✎ Edit this form (${esc(site||"")})</button></div>`;
+  if(canEditForms() && FORMS[formType]) html += `<div class="own-edit-row"><button class="own-edit-btn" onclick="window._nav('#/edit/form/${encodeURIComponent(formType)}')">✎ Edit this form (${esc(site||"")})</button></div>`;
   if(def.unverified) html += `<div class="note-box">⚠️ ${esc(def.intro)}</div>`;
   else if(def.intro) html += `<div class="note-box">${esc(def.intro)}</div>`;
   if(formType==='start_of_day' && bkCanUse()) html += `<div id="bkSod" style="margin:4px 0 18px"></div>`;
@@ -3130,10 +3134,11 @@ function router(){
   if(root==="safesheet") return viewSafeSheet();
   if(root==="wastage") return viewWastage();
   if(root==="edit"){
-    if(!isOwner()) return viewHome();
     const k=decodeURIComponent(parts[2]||"");
+    // Forms are open to any signed-in manager; everything else is owner-only.
+    if(parts[1]==="form"){ if(!canEditForms()) return viewHome(); return viewEditForm(k); }
+    if(!isOwner()) return viewHome();
     if(parts[1]==="doc") return viewEditDoc(k);
-    if(parts[1]==="form") return viewEditForm(k);
     if(parts[1]==="emails") return viewEditEmails(k);
     if(parts[1]==="staff") return viewEditStaff();
     return viewHome();
