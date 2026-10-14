@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.10.13v";
+const BUILD = "2026.10.14v";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -370,10 +370,36 @@ function isOwner(){
   }catch(e){}
   return false;
 }
-// Any signed-in manager (Simon / Brighton / Worthing) may edit the FORMS - they
-// are already a Firebase admin, so Firestore accepts their saves. The order
-// lists, reference docs, staff and email recipients stay owner-only.
-function canEditForms(){ return isOwner() || !!manager; }
+// Only named form-editors may edit the FORMS. PIN users carry a canEditForms
+// flag set by the proxy from its allow-list (Simon / Ella / Lianne); the owner
+// (Simon via manager login) always qualifies. Their saves go through the proxy,
+// which re-checks the allow-list. Order lists, docs, staff and emails stay
+// owner-only.
+function canEditForms(){ return isOwner() || !!(me && me.canEditForms); }
+// The signed-in PIN editor's PIN, kept in memory (never stored) so publishing a
+// form edit doesn't prompt every time. Set at login; lost on restart (re-prompt).
+let _editPin=null;
+async function _ensureEditPin(){
+  if(_editPin) return _editPin;
+  const p=(typeof prompt==='function') ? prompt("Enter your PIN to publish this change:") : null;
+  const t=p?String(p).trim():'';
+  if(/^\d{2,8}$/.test(t)){ _editPin=t; return _editPin; }
+  return null;
+}
+// Persist (or delete, when payload is null) a content_forms override. Managers
+// write straight to Firestore; PIN editors post to the proxy with their PIN.
+async function _persistFormDoc(type, payload){
+  if(manager){
+    if(payload){ payload.updatedAt=firebase.firestore.FieldValue.serverTimestamp(); await db.collection("content_forms").doc(type).set(payload); }
+    else { await db.collection("content_forms").doc(type).delete(); }
+    return;
+  }
+  const pin=await _ensureEditPin();
+  if(!pin) throw new Error("PIN needed to publish.");
+  const r=await fetch(PROXY+'/staff-api/save-form',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin, type:type, payload:payload||null})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok){ if(r.status===401||r.status===403){ _editPin=null; } throw new Error((data&&data.error)||'Save was blocked.'); }
+}
 let staffDocUnsub=null;
 function watchMyStaffDoc(){
   // PIN-login identities resolve against the admin-only staffPins (via the proxy),
@@ -1256,8 +1282,9 @@ async function _pinSubmit(){
     if(!r.ok){ _pinBuf=''; if(err) err.textContent = (data && data.error) || 'PIN not recognised.'; var d=$("#pinDisp"); if(d) d.innerHTML='<span style="color:#cbb9a6">····</span>'; return; }
     var role=data.role||'barista';
     var homeStore=(data.store && data.store!=='Both') ? data.store : '';
-    me={ staffId:data.id||null, name:data.name||'Staff', position:role, store:homeStore||store.site||'', viaPin:true };
+    me={ staffId:data.id||null, name:data.name||'Staff', position:role, store:homeStore||store.site||'', viaPin:true, canEditForms:!!data.canEditForms };
     saveIdentity(me);
+    if(me.canEditForms){ _editPin=pin; }  // remember for publishing form edits this session
     if(homeStore){ store.site=homeStore; }
     _pinBuf='';
     subscribeRoleData();
@@ -2284,10 +2311,10 @@ window._ofSave=async function(){
     delete payload.fields;
   } else { payload.fields=fields; delete payload.sites; }
   const nowIso=new Date().toISOString();
-  payload.stores=Object.assign({}, existing.stores||{}); payload.stores[d.store]={at:nowIso, by:(me&&me.name)||'Owner'};
-  payload.savedAt=nowIso; payload.updatedAt=firebase.firestore.FieldValue.serverTimestamp(); payload.updatedBy=(me&&me.name)||'Owner';
+  payload.stores=Object.assign({}, existing.stores||{}); payload.stores[d.store]={at:nowIso, by:(me&&me.name)||'Editor'};
+  payload.savedAt=nowIso; payload.updatedBy=(me&&me.name)||'Editor';
   const btn=document.getElementById("ofSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
-  try{ await db.collection("content_forms").doc(d.type).set(payload); ownerMsg("ofMsg","ok","Saved. The "+d.store+" version now shows your changes for everyone."); }
+  try{ await _persistFormDoc(d.type, payload); ownerMsg("ofMsg","ok","Saved. The "+d.store+" version now shows your changes for everyone."); }
   catch(e){ ownerMsg("ofMsg","err","Couldn't save: "+(e.message||e)); }
   if(btn){ btn.disabled=false; btn.textContent="Save & publish to everyone"; }
 };
@@ -2296,14 +2323,14 @@ window._ofRevert=async function(){
   if(!confirm("Undo your saved edits to the "+st+" version of this form and put the original back for everyone? The other store is not affected. This cannot be undone.")) return;
   try{
     const o=_formOverrides[type]?JSON.parse(JSON.stringify(_formOverrides[type])):null;
-    if(!o||!def.sites){ await db.collection("content_forms").doc(type).delete(); }
+    if(!o||!def.sites){ await _persistFormDoc(type, null); }
     else{
       o.sites=o.sites||{}; o.sites[st]=JSON.parse(JSON.stringify(def.sites[st]||[]));
       if(o.stores) delete o.stores[st];
       const allOriginal=Object.keys(def.sites).every(s2=>JSON.stringify(o.sites[s2]||def.sites[s2])===JSON.stringify(def.sites[s2]))
         && (o.title==null||o.title===(def.title||"")) && (o.intro==null||o.intro===(def.intro||""));
-      if(allOriginal){ await db.collection("content_forms").doc(type).delete(); }
-      else{ o.savedAt=new Date().toISOString(); o.updatedAt=firebase.firestore.FieldValue.serverTimestamp(); o.updatedBy=(me&&me.name)||'Owner'; await db.collection("content_forms").doc(type).set(o); }
+      if(allOriginal){ await _persistFormDoc(type, null); }
+      else{ o.savedAt=new Date().toISOString(); o.updatedBy=(me&&me.name)||'Editor'; await _persistFormDoc(type, o); }
     }
     ownerMsg("ofMsg","ok","Reverted the "+st+" version to the original. Reopening…");
     setTimeout(()=>{ viewEditForm(type); },600);
