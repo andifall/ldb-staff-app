@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.10.14v";
+const BUILD = "2026.10.27w";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1149,7 +1149,7 @@ const HUBS=[
     {label:'Staff Training', route:'#/doc/training'},
     {label:'Alcohol License Checklist', route:'#/form/alcohol'},
   ]},
-  {key:'bookings', title:'Bookings', desc:'Table bookings for 2+ (Brighton)', icon:'records', route:'#/bookings', wide:true, bk:true},
+  {key:'bookings', title:'Bookings', desc:'Table bookings for 2+',  icon:'records', route:'#/bookings', wide:true, bk:true},
   {key:'eh', title:'Environmental Health', desc:'Completed records & food-safety documents', icon:'records', route:'#/eh', wide:true},
 ];
 function hubIcon(name){ return `<span class="hub-ic">${ICONS[name]||''}</span>`; }
@@ -1235,7 +1235,7 @@ function viewSitePicker(){
     </div>
   </div></div>`;
 }
-window._setSite=function(s){ store.site=s; resetStatusSub(); subscribeRoleData(); location.hash="#/"; router(); };
+window._setSite=function(s){ store.site=s; bkResetSite(); resetStatusSub(); subscribeRoleData(); location.hash="#/"; router(); };
 
 /* ---------- PIN login (replaces name typing) ----------
    Staff enter the same PIN as the till. It resolves server-side (proxy, Admin
@@ -2862,15 +2862,41 @@ function isSimon(){
   if(me && (me.name||'').trim().toLowerCase()==='simon dean') return true;
   return false;
 }
-// Bookings are live for every signed-in Brighton staff member. (Worthing has no
-// table bookings.) An email-management session also counts as being "in".
-function bkCanUse(){ return store.site==='Brighton' && (!!me || !!manager); }
+// Bookings are live for every signed-in Brighton staff member. Worthing
+// bookings are Simon-only for now (PIN login as Simon Dean, or Simon's email
+// management session). An email-management session also counts as being "in".
+function bkCanUse(){
+  if(store.site==='Brighton') return !!me || !!manager;
+  if(store.site==='Worthing') return isSimon();
+  return false;
+}
+function bkSite(){ return store.site==='Worthing' ? 'Worthing' : 'Brighton'; }
+// Booking settings from the Management console (config/bookingSettings): when
+// "Worthing: allow bookings after closing time" is on, Worthing gets evening slots.
+var _bkCfg=null, _bkCfgLoading=false;
+function bkLoadCfg(){
+  if(_bkCfg || _bkCfgLoading || !db) return;
+  _bkCfgLoading=true;
+  db.collection('config').doc('bookingSettings').get().then(function(d){
+    _bkCfg = d.exists ? (d.data()||{}) : {};
+    if($("#bkTime")){ var v=$("#bkTime").value; $("#bkTime").innerHTML=bkTimeOptions(v); }
+  }).catch(function(){ _bkCfg={}; }).finally(function(){ _bkCfgLoading=false; });
+}
 function bkTodayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function bkFmtDate(iso){ try{ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return iso; } }
 function bkFmtTime(hhmm){ if(!hhmm) return ''; const p=hhmm.split(':'); let h=parseInt(p[0],10); const m=p[1]||'00'; const ap=h>=12?'pm':'am'; h=h%12; if(h===0)h=12; return m==='00'?(h+ap):(h+':'+m+ap); }
 
 // Time slots: 15-minute steps across opening hours (no odd times like 12:17).
-function bkTimeSlots(){ var out=[]; for(var h=9;h<=16;h++){ for(var m=0;m<60;m+=15){ if(h===16&&m>0) break; out.push(String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')); } } return out; }
+function bkTimeSlots(){
+  var out=[]; for(var h=9;h<=16;h++){ for(var m=0;m<60;m+=15){ if(h===16&&m>0) break; out.push(String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')); } }
+  if(bkSite()==='Worthing' && _bkCfg && _bkCfg.worthingAfterHours){
+    var extra = (Array.isArray(_bkCfg.worthingSlots) && _bkCfg.worthingSlots.length) ? _bkCfg.worthingSlots : [];
+    if(!extra.length){ for(var h2=16;h2<=21;h2++){ for(var m2=0;m2<60;m2+=15){ if(h2===16&&m2===0) continue; if(h2===21&&m2>0) break; extra.push(String(h2).padStart(2,'0')+':'+String(m2).padStart(2,'0')); } } }
+    extra.forEach(function(t){ if(out.indexOf(t)<0) out.push(t); });
+    out.sort();
+  }
+  return out;
+}
 function bkTimeOptions(sel){ return '<option value="">Choose a time</option>'+bkTimeSlots().map(function(t){ return '<option value="'+t+'"'+(t===sel?' selected':'')+'>'+bkFmtTime(t)+'</option>'; }).join(''); }
 function bkNowHHMM(){ var d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 
@@ -2936,7 +2962,7 @@ async function bkAutoExtend(list){
     toAdd.slice(0,400).forEach(function(it){
       var b=it.base;
       var ref=db.collection('bookings').doc();
-      batch.set(ref, { site:'Brighton', dateISO:it.date, time:b.time||'', people:b.people||4,
+      batch.set(ref, { site:b.site||bkSite(), dateISO:it.date, time:b.time||'', people:b.people||4,
         name:b.name||'', phone:b.phone||'', email:b.email||'', notes:b.notes||'',
         seriesId:it.sid, repeat:it.repeat, createdBy:b.createdBy||'',
         createdAt:firebase.firestore.FieldValue.serverTimestamp(), updatedAt:firebase.firestore.FieldValue.serverTimestamp() });
@@ -2945,10 +2971,14 @@ async function bkAutoExtend(list){
   }catch(e){} finally{ _bkExtendBusy=false; }
 }
 
-let _bkUnsub=null, _bkTodayList=[];
+let _bkUnsub=null, _bkUnsubSite='', _bkTodayList=[];
+// Switching site: drop the old site's listener so today's strips follow the new site.
+function bkResetSite(){ if(_bkUnsub){ try{_bkUnsub()}catch(e){} } _bkUnsub=null; _bkUnsubSite=''; _bkTodayList=[]; }
 function startBookingsToday(){
+  if(_bkUnsub && _bkUnsubSite!==bkSite()) bkResetSite();
   if(_bkUnsub || !db) return;
-  _bkUnsub = db.collection('bookings').where('site','==','Brighton')
+  _bkUnsubSite = bkSite();
+  _bkUnsub = db.collection('bookings').where('site','==',_bkUnsubSite)
     .onSnapshot(function(snap){
       _bkTodayList = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
         .filter(function(b){ return b.dateISO===bkTodayISO(); })
@@ -2979,7 +3009,7 @@ function renderSodBookings(){
 function viewBookingsMenu(){
   if(!bkCanUse()) return viewHome();
   var h=backbar("Home","#/");
-  h+='<h1 class="page">Bookings</h1><p class="sub">Brighton · tables for 2 or more</p>';
+  h+='<h1 class="page">Bookings</h1><p class="sub">'+esc(bkSite())+' · tables for 2 or more</p>';
   h+='<div class="rowlist">'+rowItem("See bookings","#/bookings/list")+rowItem("Create booking","#/bookings/new")+'</div>';
   shell(h);
 }
@@ -2992,7 +3022,7 @@ function viewBookingsList(){
   h+='<div id="bkList"><div class="spinner"></div></div>';
   shell(h);
   if(_bkListUnsub){ try{_bkListUnsub()}catch(e){} }
-  _bkListUnsub = db.collection('bookings').where('site','==','Brighton')
+  _bkListUnsub = db.collection('bookings').where('site','==',bkSite())
     .onSnapshot(function(snap){
       var list=snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
         .filter(function(b){ return (b.dateISO||'') >= bkTodayISO(); })
@@ -3056,6 +3086,7 @@ let _bkEditing=null, _bkEditSeriesId=null;
 function viewBookingForm(id){
   if(!bkCanUse()) return viewHome();
   _bkEditing = id || null;
+  bkLoadCfg();
   var peopleOpts=''; for(var n=2;n<=12;n++){ peopleOpts+='<option value="'+n+'">'+n+'</option>'; }
   var h=backbar("Bookings","#/bookings");
   h+='<h1 class="page">'+(id?'Edit booking':'New booking')+'</h1>';
@@ -3128,9 +3159,9 @@ async function bkSave(){
       }
     } else {
       var repeat = ($("#bkRepeat") && $("#bkRepeat").value) || 'none';
-      var base=Object.assign({ site:'Brighton', dateISO:dateISO, createdBy:who }, shared);
+      var base=Object.assign({ site:bkSite(), dateISO:dateISO, createdBy:who }, shared);
       if(repeat && repeat!=='none'){
-        var n=await bkWriteSeries(Object.assign({site:'Brighton', createdBy:who, time:time, people:people, name:name, phone:phone, email:email, notes:notes}), dateISO, repeat);
+        var n=await bkWriteSeries(Object.assign({site:bkSite(), createdBy:who, time:time, people:people, name:name, phone:phone, email:email, notes:notes}), dateISO, repeat);
         toast(n>1 ? ('Created '+n+' repeating bookings') : 'Booking saved');
         location.hash='#/bookings/list'; return;
       }
