@@ -149,7 +149,7 @@
   .field label.q{display:block;font-weight:600;color:var(--bark);margin-bottom:7px;font-size:15px}
   .field .help{font-size:13px;color:var(--bark55);margin:-3px 0 8px}
   .req{color:var(--danger)}
-  input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],textarea,select{
+  input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],input[type=tel],input[type=email],textarea,select{
     width:100%;font-size:16px;padding:13px 14px;border:1px solid var(--bark15);border-radius:12px;background:#fff;font-family:var(--body);color:var(--bark)}
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--golden);box-shadow:0 0 0 3px rgba(255,190,92,.28)}
   textarea{min-height:90px;resize:vertical}
@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.10.27w";
+const BUILD = "2026.10.27x";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
