@@ -72,6 +72,13 @@
   .pill.ghost:hover{background:var(--blush);filter:none}
   .pill.lock::after{content:"  🔒";font-size:12px;opacity:.7}
   .pill.small{padding:13px 16px;font-size:13px}
+  .bk-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
+  .bk-modal{background:#fff;border-radius:18px;padding:22px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  .bk-modal h3{margin:0 0 8px;font-family:var(--head);color:var(--bark);text-transform:uppercase;letter-spacing:.04em;font-size:17px}
+  .bk-modal p{margin:0 0 16px;color:var(--bark);font-size:15px;line-height:1.4}
+  .bk-modal .pill{margin-bottom:10px}
+  .bk-modal-cancel{appearance:none;width:100%;border:0;background:none;color:var(--bark);opacity:.6;font-size:14px;padding:8px;cursor:pointer;font-family:var(--body)}
+  .bk-edit-btn{background:none;border:none;font-size:19px;cursor:pointer;padding:2px 4px}
   .locked-note{font-size:13px;color:var(--bark55);text-align:center;margin:10px 0 0}
   .backbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .back{background:none;border:0;color:var(--bark70);font-family:var(--head);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:12px;cursor:pointer;padding:6px 0}
@@ -330,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.10.27y";
+const BUILD = "2026.10.27z";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2903,6 +2910,28 @@ function bkNowHHMM(){ var d=new Date(); return String(d.getHours()).padStart(2,'
 // ----- Recurring bookings helpers -----
 var BK_REPEATS=[['none','Does not repeat'],['weekly','Every week'],['fortnightly','Every 2 weeks'],['4weekly','Every 4 weeks'],['monthly','Every month']];
 function bkRepeatLabel(r){ var f=BK_REPEATS.find(function(x){return x[0]===r;}); return f?f[1]:''; }
+// Ask whether an edit applies to just this booking or this plus all future ones in
+// the series. Resolves 'this', 'all', or null (cancelled).
+function bkChooseScope(repeatLabel){
+  return new Promise(function(resolve){
+    var ov=document.createElement('div');
+    ov.className='bk-modal-ov';
+    ov.innerHTML='<div class="bk-modal">'
+      +'<h3>Repeating booking</h3>'
+      +'<p>This booking repeats ('+esc(repeatLabel||'series')+'). Apply your changes to:</p>'
+      +'<button class="pill cta" data-s="this">Just this one</button>'
+      +'<button class="pill ghost" data-s="all">This and all future ones</button>'
+      +'<button class="bk-modal-cancel" data-s="cancel">Cancel</button>'
+      +'</div>';
+    function done(v){ try{document.body.removeChild(ov);}catch(e){} resolve(v); }
+    ov.addEventListener('click', function(e){
+      var t=e.target, s=t&&t.getAttribute?t.getAttribute('data-s'):null;
+      if(!s){ if(t===ov) done(null); return; }
+      done(s==='cancel'?null:s);
+    });
+    document.body.appendChild(ov);
+  });
+}
 function bkMkSeriesId(){ return 'ser_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function bkAddDays(iso,days){ var d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+days); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function bkAddMonths(iso,months){ var d=new Date(iso+'T00:00:00'); var day=d.getDate(); d.setMonth(d.getMonth()+months); if(d.getDate()<day){ d.setDate(0); } return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -3018,7 +3047,7 @@ let _bkListUnsub=null;
 function viewBookingsList(){
   if(!bkCanUse()) return viewHome();
   var h=backbar("Bookings","#/bookings");
-  h+='<h1 class="page">Upcoming bookings</h1><p class="sub">Touch and hold a booking to edit. Tap the bin to delete.</p>';
+  h+='<h1 class="page">Upcoming bookings</h1><p class="sub">Tap the pencil to edit a booking, or the bin to delete.</p>';
   h+='<div id="bkList"><div class="spinner"></div></div>';
   shell(h);
   if(_bkListUnsub){ try{_bkListUnsub()}catch(e){} }
@@ -3042,13 +3071,14 @@ function bkRenderList(list){
       +'<div style="font-size:12px;color:#888;margin-top:2px;">'+(bk.phone?esc(bk.phone):'')+(bk.email?(' · '+esc(bk.email)):'')+'</div>'
       +(bk.notes?('<div style="font-size:12px;color:#aaa;margin-top:2px;">'+esc(bk.notes)+'</div>'):'')
       +'</div>'
-      +'<button onclick="window._bkDelete(\''+bk.id+'\',event)" style="background:none;border:none;font-size:20px;cursor:pointer;">🗑️</button>'
+      +'<div style="display:flex;align-items:center;gap:4px;flex:none;">'
+      +'<button class="bk-edit-btn" onclick="window._bkEdit(\''+bk.id+'\',event)" aria-label="Edit booking">✏️</button>'
+      +'<button onclick="window._bkDelete(\''+bk.id+'\',event)" style="background:none;border:none;font-size:20px;cursor:pointer;" aria-label="Delete booking">🗑️</button>'
+      +'</div>'
       +'</div>';
   }).join('');
-  Array.prototype.forEach.call(b.querySelectorAll('.bk-row'), function(row){
-    bkAttachLongPress(row, function(){ location.hash='#/bookings/edit/'+row.getAttribute('data-id'); });
-  });
 }
+window._bkEdit=function(id, ev){ if(ev){ ev.stopPropagation(); } location.hash='#/bookings/edit/'+id; };
 function bkAttachLongPress(el, cb){
   var t=null;
   function start(){ t=setTimeout(function(){ t=null; cb(); }, 550); }
@@ -3082,10 +3112,11 @@ window._bkDelete=async function(id, ev){
   }catch(e){ alert('Could not delete: '+e.message); }
 };
 
-let _bkEditing=null, _bkEditSeriesId=null;
+let _bkEditing=null, _bkEditSeriesId=null, _bkEditRepeat='';
 function viewBookingForm(id){
   if(!bkCanUse()) return viewHome();
   _bkEditing = id || null;
+  _bkEditSeriesId = null; _bkEditRepeat = '';
   bkLoadCfg();
   var peopleOpts=''; for(var n=2;n<=12;n++){ peopleOpts+='<option value="'+n+'">'+n+'</option>'; }
   var h=backbar("Bookings","#/bookings");
@@ -3123,7 +3154,8 @@ function viewBookingForm(id){
       if($("#bkEmail")) $("#bkEmail").value=d.email||'';
       if($("#bkNotes")) $("#bkNotes").value=d.notes||'';
       _bkEditSeriesId = d.seriesId || null;
-      if($("#bkSeriesNote") && d.seriesId){ $("#bkSeriesNote").textContent = 'Part of a repeating booking ('+bkRepeatLabel(d.repeat)+'). You can choose to change just this one or the whole series when you save.'; }
+      _bkEditRepeat = d.repeat || '';
+      if($("#bkSeriesNote") && d.seriesId){ $("#bkSeriesNote").textContent = 'Part of a repeating booking ('+bkRepeatLabel(d.repeat)+'). When you save, you can choose just this one or all future ones.'; }
     });
   }
 }
@@ -3148,13 +3180,19 @@ async function bkSave(){
   try{
     if(_bkEditing){
       // Editing an existing booking. If it belongs to a repeating series, ask scope.
-      if(_bkEditSeriesId && confirm('This is a repeating booking.\n\nOK = change the WHOLE series (all future dates).\nCancel = change only THIS booking.')){
-        var snap=await db.collection('bookings').where('seriesId','==',_bkEditSeriesId).get();
-        var batch=db.batch(); var today=bkTodayISO();
-        snap.docs.forEach(function(d){ if((d.data().dateISO||'')>=today){ batch.update(d.ref, shared); } });
-        await batch.commit();
+      if(_bkEditSeriesId){
+        var scope=await bkChooseScope(bkRepeatLabel(_bkEditRepeat));
+        if(scope===null){ btn.disabled=false; btn.textContent='Save changes'; return; }
+        if(scope==='all'){
+          var snap=await db.collection('bookings').where('seriesId','==',_bkEditSeriesId).get();
+          var batch=db.batch(); var today=bkTodayISO();
+          snap.docs.forEach(function(d){ if((d.data().dateISO||'')>=today){ batch.update(d.ref, shared); } });
+          await batch.commit();
+        } else {
+          // Just this one: date can be changed too (affects only this doc).
+          await db.collection('bookings').doc(_bkEditing).update(Object.assign({dateISO:dateISO}, shared));
+        }
       } else {
-        // Single edit: date can be changed too (detaches nothing; just this doc).
         await db.collection('bookings').doc(_bkEditing).update(Object.assign({dateISO:dateISO}, shared));
       }
     } else {
