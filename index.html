@@ -330,7 +330,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.10.27x";
+const BUILD = "2026.10.27y";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2867,7 +2867,7 @@ function isSimon(){
 // management session). An email-management session also counts as being "in".
 function bkCanUse(){
   if(store.site==='Brighton') return !!me || !!manager;
-  if(store.site==='Worthing') return isSimon();
+  if(store.site==='Worthing') return !!me || !!manager;
   return false;
 }
 function bkSite(){ return store.site==='Worthing' ? 'Worthing' : 'Brighton'; }
