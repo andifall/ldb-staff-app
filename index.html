@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.04a";
+const BUILD = "2026.11.04b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -3030,11 +3030,19 @@ var EV_CHECKLIST=[
   'Put the outdoor tables towards the hall (not blocking counter)',
   'Thank you!! xox'
 ];
-let _evUnsub=null, _evList=[];
+let _evUnsub=null, _evList=[], _evCfgUnsub=null;
 function evAddDaysISO(n){ var d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 // Exhibitions have no start time (they run all month), so they never count.
 function evIsEvening(e){ var t=String(e.time||''); return /^\d\d:\d\d$/.test(t) && t>='16:00'; }
 function startEventsWatch(){
+  // The checklist is edited in the Management portal (config/eventChecklist).
+  if(!_evCfgUnsub && db){
+    _evCfgUnsub = db.collection('config').doc('eventChecklist').onSnapshot(function(d){
+      var items = (d.exists && Array.isArray((d.data()||{}).items)) ? d.data().items.map(function(x){ return String(x).trim(); }).filter(Boolean) : [];
+      if(items.length) EV_CHECKLIST = items;
+      if(store.site==='Worthing' && (location.hash==='#/' || location.hash==='')) viewHome();
+    }, function(){});
+  }
   if(_evUnsub || !db) return;
   _evUnsub = db.collection('events').where('location','==','Worthing').onSnapshot(function(snap){
     var from=bkTodayISO(), to=evAddDaysISO(7);
