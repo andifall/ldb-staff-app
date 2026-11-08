@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.04b";
+const BUILD = "2026.11.08a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -349,6 +349,10 @@ const POSITIONS = [["barista","Barista"],["cook","Cook"],["kitchen_porter","Kitc
 function posLabel(p){ const f=POSITIONS.find(x=>x[0]===p); return f?f[1]:""; }
 function roleRank(p){ return p==='management'?2 : p==='supervisor'?1 : 0; }
 function roleAtLeast(r){ return !!me && roleRank(me.position) >= roleRank(r); }
+// Per-person Staff Hub permission (staffPins.perms, set in the management
+// console). A feature is unlocked if the role already allows it OR the perm is
+// ticked, so a trusted barista can be granted one thing without a role change.
+function hasPerm(k){ return !!(me && me.perms && me.perms[k]); }
 function loadIdentity(){
   try{
     const s=localStorage.getItem("ld_identity"); if(!s) return null;
@@ -1181,20 +1185,22 @@ function viewHome(){
     h += `<button class="hub-tile gold wide" onclick="location.hash='#/form/fat_trap'">
       ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Fat Trap Report</div><div class="hub-d">Your daily report - tap to fill it in</div></div></button>`;
   }
-  if(roleAtLeast('supervisor')){
+  if(roleAtLeast('supervisor') || hasPerm('managementHub')){
     h += `<button class="hub-tile wide" onclick="location.hash='#/formcheck'">
       ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">Management Hub <span id="fcBadge" class="fc-badge" style="display:none"></span></div><div class="hub-d">Checks, temps & wastage</div></div></button>`;
+  }
+  if(roleAtLeast('supervisor') || hasPerm('safeSheet')){
     h += `<button class="hub-tile wide" onclick="location.hash='#/safesheet'">
       ${hubIcon('lock')}<div class="hub-txt"><div class="hub-t">Safe Sheet</div><div class="hub-d">Cash in & out, with a running total</div></div></button>`;
   }
-  if(roleAtLeast('management')){
+  if(roleAtLeast('management') || hasPerm('fourWeekly')){
     h += `<button class="hub-tile wide" onclick="location.hash='#/form/four_weekly'">
       ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">4-Weekly Report</div><div class="hub-d">Monthly food-safety review</div></div></button>`;
   }
   h += `</div>`;
   h += `<p class="muted" style="text-align:center;font-size:11px;margin-top:22px">Version ${esc(BUILD)}</p>`;
   shell(h);
-  if(roleAtLeast('supervisor')) computeFormCheck(function(issues){
+  if(roleAtLeast('supervisor') || hasPerm('managementHub')) computeFormCheck(function(issues){
     const b=$("#fcBadge"); if(!b) return;
     const n=issues.filter(function(i){ return !i.acked; }).length;
     if(n>0){ b.textContent=n; b.style.display="inline-block"; } else { b.style.display="none"; }
@@ -1290,7 +1296,7 @@ async function _pinSubmit(){
     if(!r.ok){ _pinBuf=''; if(err) err.textContent = (data && data.error) || 'PIN not recognised.'; var d=$("#pinDisp"); if(d) d.innerHTML='<span style="color:#cbb9a6">····</span>'; return; }
     var role=data.role||'barista';
     var homeStore=(data.store && data.store!=='Both') ? data.store : '';
-    me={ staffId:data.id||null, name:data.name||'Staff', position:role, store:homeStore||store.site||'', viaPin:true, canEditForms:!!data.canEditForms };
+    me={ staffId:data.id||null, name:data.name||'Staff', position:role, store:homeStore||store.site||'', viaPin:true, canEditForms:!!data.canEditForms, perms:(data.perms&&typeof data.perms==='object')?data.perms:{} };
     saveIdentity(me);
     if(me.canEditForms){ _editPin=pin; }  // remember for publishing form edits this session
     if(homeStore){ store.site=homeStore; }
@@ -2483,7 +2489,7 @@ function schedLine(which){
 }
 var _rotaToday=null, _rotaTodayUnsub=null, _todayStatus=null, _statusUnsub=null, _monthStatus=null, _monthUnsub=null, _acks=null, _acksUnsub=null;
 function subscribeRoleData(){
-  if(!fbReady || !roleAtLeast('supervisor')) return;
+  if(!fbReady || !(roleAtLeast('supervisor') || hasPerm('managementHub'))) return;
   if(!_rotaTodayUnsub && store.site) _rotaTodayUnsub=db.collection("rota_today").doc(store.site+"__"+localDate()).onSnapshot(function(d){
     _rotaToday = d.exists ? d.data() : {}; refreshRoleViews();
   }, function(e){ console.warn("rota_today:",e&&e.message); _rotaToday=_rotaToday||{}; refreshRoleViews(); });
@@ -2551,7 +2557,7 @@ window._unackIssue=async function(key, date){
 // ---- Outstanding items from earlier days (until a manager ticks them off) ----
 var _history=null, _historyKey=null;
 async function loadHistory(force){
-  if(!fbReady || !roleAtLeast('supervisor') || !store.site) return;
+  if(!fbReady || !(roleAtLeast('supervisor') || hasPerm('managementHub')) || !store.site) return;
   const hk=store.site+"__"+localDate();
   if(!force && _historyKey===hk && _history!==null) return;
   _historyKey=hk;
@@ -2595,7 +2601,7 @@ function niceDate(d){ try{ return new Date(d+"T12:00:00").toLocaleDateString("en
 // ---- Wastage (weekly report) ----
 var _wastage=null, _wastageKey=null;
 async function loadWastage(force){
-  if(!fbReady || !roleAtLeast('supervisor') || !store.site) return;
+  if(!fbReady || !(roleAtLeast('supervisor') || hasPerm('managementHub')) || !store.site) return;
   const wk=store.site+"__"+localDate();
   if(!force && _wastageKey===wk && _wastage!==null) return;
   _wastageKey=wk;
@@ -2641,10 +2647,10 @@ async function verifyTodayFromSubmissions(force){
 function refreshRoleViews(){
   const h=location.hash||"";
   if(/^#\/formcheck/.test(h)){ viewFormCheck(); return; }
-  if((h==="#/"||h==="") && roleAtLeast('supervisor')){ const b=$("#fcBadge"); if(b){ const n=openIssueCount(); if(n){ b.textContent=n; b.style.display="inline-block"; } else b.style.display="none"; } }
+  if((h==="#/"||h==="") && (roleAtLeast('supervisor') || hasPerm('managementHub'))){ const b=$("#fcBadge"); if(b){ const n=openIssueCount(); if(n){ b.textContent=n; b.style.display="inline-block"; } else b.style.display="none"; } }
 }
 function viewFormCheck(){
-  if(!roleAtLeast('supervisor')) return viewHome();
+  if(!(roleAtLeast('supervisor') || hasPerm('managementHub'))) return viewHome();
   subscribeRoleData();
   verifyTodayFromSubmissions();
   let h=backbar("Home","#/");
@@ -2729,7 +2735,7 @@ function subscribeSafe(){
   }, function(e){ console.warn("safe_sheet:",e&&e.message); const b=$("#safeBody"); if(b) b.innerHTML=`<p class="err">Couldn't load: ${esc(e.message)}</p>`; });
 }
 function viewSafeSheet(){
-  if(!roleAtLeast('supervisor')) return viewHome();
+  if(!(roleAtLeast('supervisor') || hasPerm('safeSheet'))) return viewHome();
   let h=backbar("Home","#/");
   h+=`<h1 class="page">Safe Sheet</h1><p class="sub">${esc(store.site)} · running total of the safe</p>`;
   h+=`<div id="safeBody"><div class="spinner"></div></div>`;
