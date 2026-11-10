@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.08a";
+const BUILD = "2026.11.10a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -373,6 +373,35 @@ var me = loadIdentity();   // {staffId, name, position, store}
    identity name (no separate sign-in). Extend OWNER_NAMES if ever needed. */
 var OWNER_NAMES = ["simon dean", "lianne fox"];
 var PROXY = "https://laughing-dog-proxy.onrender.com";
+// Keep a PIN-signed-in person's role + permissions current. Changes made in
+// the management console (Staff > Can do) used to only apply after signing out
+// and back in; now the hub re-checks on open, when it comes back to the front,
+// and every few minutes. A removed or deactivated person is signed out.
+var _refreshingMe=false;
+async function refreshMe(){
+  if(_refreshingMe || !me || !me.viaPin || !me.staffId) return;
+  _refreshingMe=true;
+  try{
+    var r=await fetch(PROXY+'/staff-api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:me.staffId})});
+    var d=await r.json().catch(function(){ return null; });
+    // Only sign out when the proxy says the person is gone/deactivated (not on a
+    // plain 404 from an older proxy that doesn't have this endpoint yet).
+    if(r.status===404 && d && (d.error==='Not found' || d.error==='Inactive')){ window._switchUser && window._switchUser(); return; }
+    if(!r.ok || !d || !me) return;
+    var perms=(d.perms&&typeof d.perms==='object')?d.perms:{};
+    var changed = (d.role||'barista')!==me.position || (d.name||me.name)!==me.name ||
+      !!d.canEditForms!==!!me.canEditForms || JSON.stringify(perms)!==JSON.stringify(me.perms||{});
+    if(!changed) return;
+    me.position=d.role||'barista'; me.name=d.name||me.name; me.canEditForms=!!d.canEditForms; me.perms=perms;
+    saveIdentity(me);
+    subscribeRoleData();
+    router();
+  }catch(e){ /* offline: keep what we have */ }
+  finally{ _refreshingMe=false; }
+}
+setTimeout(refreshMe, 1500);
+setInterval(refreshMe, 3*60*1000);
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') refreshMe(); });
 function isOwner(){
   try{
     if(manager && manager.email==='simon@ldbrighton.com') return true;
@@ -408,6 +437,20 @@ async function _persistFormDoc(type, payload){
   const pin=await _ensureEditPin();
   if(!pin) throw new Error("PIN needed to publish.");
   const r=await fetch(PROXY+'/staff-api/save-form',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin, type:type, payload:payload||null})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok){ if(r.status===401||r.status===403){ _editPin=null; } throw new Error((data&&data.error)||'Save was blocked.'); }
+}
+// Same as _persistFormDoc but for order lists / reference docs (content_docs).
+async function _persistContentDoc(key, payload){
+  if(manager){
+    if(payload) await db.collection("content_docs").doc(key).set(payload);
+    else await db.collection("content_docs").doc(key).delete();
+    return;
+  }
+  const pin=await _ensureEditPin();
+  if(!pin) throw new Error("PIN needed to publish.");
+  if(payload) delete payload.updatedAt; // the server stamps it
+  const r=await fetch(PROXY+'/staff-api/save-doc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin, key:key, payload:payload||null})});
   const data=await r.json().catch(()=>({}));
   if(!r.ok){ if(r.status===401||r.status===403){ _editPin=null; } throw new Error((data&&data.error)||'Save was blocked.'); }
 }
@@ -1938,7 +1981,7 @@ window._toggleSec=function(el){ el.closest(".acc-item").classList.toggle("open")
 function viewRefDoc(doc, key){
   let h=backbar("Home","#/");
   h+=`<h1 class="page">${esc(doc.title)}</h1><p class="sub">${esc(doc.sub||"")} · ${esc(store.site)}</p>`;
-  if(isOwner() && key){
+  if(canEditForms() && key){
     h+=`<div class="own-edit-row"><button class="own-edit-btn" onclick="window._nav('#/edit/doc/${encodeURIComponent(key)}')">✎ Edit this document</button></div>`;
   }
   h+=doc.sections.map((s,i)=>`<div class="acc-item${i===0?' open':''}">
@@ -1994,10 +2037,10 @@ function viewOrder(key){
   const email=toList.join(", ");
   let h=backbar("Orders","#/hub/orders");
   h+=`<h1 class="page">${esc(doc.title)}</h1><p class="sub">${esc(doc.sub||"")} · ${esc(store.site)}</p>`;
-  if(isOwner()){
+  if(canEditForms()){
     h+=`<div class="own-edit-row">
       <button class="own-edit-btn" onclick="window._nav('#/edit/doc/${encodeURIComponent(key)}')">✎ Edit this list</button>
-      <button class="own-edit-btn" onclick="window._nav('#/edit/emails/${encodeURIComponent(key)}')">✉ Who this emails (${toList.length})</button>
+      ${isOwner()?`<button class="own-edit-btn" onclick="window._nav('#/edit/emails/${encodeURIComponent(key)}')">✉ Who this emails (${toList.length})</button>`:''}
     </div>`;
   }
   h+=`<div class="note-box">Put the number you need next to each item, then Submit. The order emails to ${esc(email)} and is saved for management.</div>`;
@@ -2208,13 +2251,13 @@ window._odSave=async function(){
     store:docStoreFor(d.key), kind:'doc', supplierMode:!!d.supplierMode,
     sections:d.sections.filter(s=>(s.h&&s.h.trim())||(s.b&&s.b.trim())).map(s=>({h:(s.h||"").trim(), b:(s.b||"").replace(/\r\n/g,"\n").replace(/\s+$/,""), emailNote:!!s.emailNote})),
     savedAt:new Date().toISOString(), updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:(me&&me.name)||'Owner' };
-  try{ await db.collection("content_docs").doc(d.key).set(payload); ownerMsg("odMsg","ok","Saved. Everyone's app now shows this version."); }
+  try{ await _persistContentDoc(d.key, payload); ownerMsg("odMsg","ok","Saved. Everyone's app now shows this version."); }
   catch(e){ ownerMsg("odMsg","err","Couldn't save: "+(e.message||e)); }
   if(btn){ btn.disabled=false; btn.textContent="Save & publish to everyone"; }
 };
 window._odRevert=async function(){
   if(!confirm("Remove your edits and put the original built-in list back for everyone? This cannot be undone.")) return;
-  try{ await db.collection("content_docs").doc(_ownerDoc.key).delete(); ownerMsg("odMsg","ok","Reverted to the original. Reopening…"); setTimeout(()=>{ viewEditDoc(_ownerDoc.key); },600); }
+  try{ await _persistContentDoc(_ownerDoc.key, null); ownerMsg("odMsg","ok","Reverted to the original. Reopening…"); setTimeout(()=>{ viewEditDoc(_ownerDoc.key); },600); }
   catch(e){ ownerMsg("odMsg","err","Couldn't revert: "+(e.message||e)); }
 };
 
@@ -3290,8 +3333,9 @@ function router(){
     const k=decodeURIComponent(parts[2]||"");
     // Forms are open to any signed-in manager; everything else is owner-only.
     if(parts[1]==="form"){ if(!canEditForms()) return viewHome(); return viewEditForm(k); }
+    // Order lists + reference docs: anyone with the "Edit forms" permission.
+    if(parts[1]==="doc"){ if(!canEditForms()) return viewHome(); return viewEditDoc(k); }
     if(!isOwner()) return viewHome();
-    if(parts[1]==="doc") return viewEditDoc(k);
     if(parts[1]==="emails") return viewEditEmails(k);
     if(parts[1]==="staff") return viewEditStaff();
     return viewHome();
