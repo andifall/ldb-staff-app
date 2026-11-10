@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.10a";
+const BUILD = "2026.11.10b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -377,6 +377,18 @@ var PROXY = "https://laughing-dog-proxy.onrender.com";
 // the management console (Staff > Can do) used to only apply after signing out
 // and back in; now the hub re-checks on open, when it comes back to the front,
 // and every few minutes. A removed or deactivated person is signed out.
+// Staff PIN users get a Firebase custom token from the proxy so Firestore
+// rules can recognise them (bookings are staff-only). Never replaces a
+// signed-in manager account (they already have access).
+async function _staffSignIn(token){
+  try{
+    if(!token || !auth) return;
+    var cur=auth.currentUser;
+    if(cur && cur.email) return;           // manager signed in: leave it
+    if(cur && !cur.email) return;          // already signed in as staff
+    await auth.signInWithCustomToken(token);
+  }catch(e){ console.warn('staff sign-in:', e && e.message); }
+}
 var _refreshingMe=false;
 async function refreshMe(){
   if(_refreshingMe || !me || !me.viaPin || !me.staffId) return;
@@ -388,6 +400,7 @@ async function refreshMe(){
     // plain 404 from an older proxy that doesn't have this endpoint yet).
     if(r.status===404 && d && (d.error==='Not found' || d.error==='Inactive')){ window._switchUser && window._switchUser(); return; }
     if(!r.ok || !d || !me) return;
+    await _staffSignIn(d.firebaseToken);
     var perms=(d.perms&&typeof d.perms==='object')?d.perms:{};
     var changed = (d.role||'barista')!==me.position || (d.name||me.name)!==me.name ||
       !!d.canEditForms!==!!me.canEditForms || JSON.stringify(perms)!==JSON.stringify(me.perms||{});
@@ -1341,6 +1354,7 @@ async function _pinSubmit(){
     var homeStore=(data.store && data.store!=='Both') ? data.store : '';
     me={ staffId:data.id||null, name:data.name||'Staff', position:role, store:homeStore||store.site||'', viaPin:true, canEditForms:!!data.canEditForms, perms:(data.perms&&typeof data.perms==='object')?data.perms:{} };
     saveIdentity(me);
+    await _staffSignIn(data.firebaseToken);
     if(me.canEditForms){ _editPin=pin; }  // remember for publishing form edits this session
     if(homeStore){ store.site=homeStore; }
     _pinBuf='';
@@ -1357,6 +1371,7 @@ function viewIdentify(){ return viewPinLogin(); }
 // Sign the current staff member out of this device (shared till) so the next
 // person can enter their own PIN. Keeps the store selection.
 window._switchUser=function(){
+  try{ if(auth && auth.currentUser && !auth.currentUser.email) auth.signOut(); }catch(e){}
   me=null; _pinBuf='';
   try{ localStorage.removeItem("ld_identity"); }catch(e){}
   try{ if(staffDocUnsub){ staffDocUnsub(); staffDocUnsub=null; } }catch(e){}
@@ -3064,7 +3079,7 @@ function startBookingsToday(){
         .sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
       if(location.hash==='#/' || location.hash===''){ viewHome(); }
       if($("#bkSod")) renderSodBookings();
-    }, function(){});
+    }, function(){ bkResetSite(); });  // e.g. not signed in yet: retry on next call / auth change
 }
 /* =========================================================
    EVENING EVENTS (Worthing only). Read live from the website's events
@@ -3366,11 +3381,15 @@ window.addEventListener("hashchange",router);
 /* auth state */
 if(auth){
   auth.onAuthStateChanged(u=>{
+    // Bookings need a signed-in user, so (re)start them whenever auth changes.
+    try{ bkResetSite(); if(me && typeof bkCanUse==='function' && bkCanUse()) startBookingsToday(); }catch(e){}
     if(u && ADMIN_SCOPE[(u.email||"").toLowerCase()]!==undefined){
       manager={email:u.email.toLowerCase(),scope:ADMIN_SCOPE[u.email.toLowerCase()]};
       if(location.hash==="#/login") go("#/mgmt"); else router();
     } else {
       manager=null; router();
+      // Signed out (or never signed in): a PIN user picks up their staff token again.
+      if(!u && me && me.viaPin) setTimeout(refreshMe, 300);
     }
   });
 }
