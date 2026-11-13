@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.13a";
+const BUILD = "2026.11.13b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2061,7 +2061,7 @@ var INSTA_FORM_DEFAULT = "https://docs.google.com/forms/d/e/1FAIpQLSdx3q5aZwN2Kc
 function instaCfg(){ return _docOverrides['insta_config'] || {}; }
 function instaCreators(){ var c=instaCfg().creators; return Array.isArray(c)?c:[]; }
 function isInstaCreator(name){ if(!name) return false; var n=String(name).trim().toLowerCase(); return instaCreators().some(function(x){ return String(x).trim().toLowerCase()===n; }); }
-function canInsta(){ return isOwner() || (!!me && isInstaCreator(me.name)); }
+function canInsta(){ return isOwner() || hasPerm('contentCreator'); }
 function instaFormUrl(){ var u=instaCfg().formUrl; return (u&&String(u).trim())?String(u).trim():INSTA_FORM_DEFAULT; }
 function instaShotList(){ return instaCfg().shotList||""; }
 window._instaUpload=function(){
@@ -2572,7 +2572,6 @@ function renderStaffList(){
         <div><div style="font-weight:600">${esc(s.name||"(no name)")}</div><div class="muted" style="font-size:12.5px">${esc(s.store||"")}</div></div>
         <select class="sel" style="max-width:180px" onchange="window._setStaffPos('${s.id}', this.value)">${opts}</select>
       </div>
-      <label class="wchk" style="margin:10px 0 2px"><input type="checkbox" ${isInstaCreator(s.name)?'checked':''} data-name="${esc(s.name||'')}" onchange="window._setInstaCreatorEl(this)"> <span>Content creator (can upload Insta clips)</span></label>
       <div class="own-tools"><button class="del" onclick="window._removeStaff('${s.id}','${esc((s.name||'').replace(/'/g,''))}')">Remove from app</button></div>
     </div>`;
   }).join("");
