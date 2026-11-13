@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.10b";
+const BUILD = "2026.11.13a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1253,6 +1253,10 @@ function viewHome(){
     h += `<button class="hub-tile wide" onclick="location.hash='#/form/four_weekly'">
       ${hubIcon('records')}<div class="hub-txt"><div class="hub-t">4-Weekly Report</div><div class="hub-d">Monthly food-safety review</div></div></button>`;
   }
+  if(canInsta()){
+    h += `<button class="hub-tile gold wide" onclick="location.hash='#/insta'">
+      ${hubIcon('report')}<div class="hub-txt"><div class="hub-t">Insta Uploads</div><div class="hub-d">Film content &amp; upload clips</div></div></button>`;
+  }
   h += `</div>`;
   h += `<p class="muted" style="text-align:center;font-size:11px;margin-top:22px">Version ${esc(BUILD)}</p>`;
   shell(h);
@@ -2043,6 +2047,90 @@ function splitOrderItem(line){ const p=String(line||"").split(/\s*=>\s*/); retur
 // Single-supplier lists (owner toggle) send a clean list with no "by supplier"
 // breakdown, using the supplier wording above.
 function docSupplierMode(key){ const o=_docOverrides[key]; return !!(o && o.supplierMode); }
+
+/* =========================================================
+   INSTA UPLOADS: staff film content and upload clips.
+   Settings live in content_docs/insta_config (owner-editable,
+   synced live via the content_docs snapshot above):
+     { shotList: "<what needs filming>", formUrl: "<prefill link>",
+       creators: ["Staff Name", ...] }
+   The upload link opens in the SAME window so Google sign-in works
+   (an embedded frame can't do Google's file-upload sign-in).
+   ========================================================= */
+var INSTA_FORM_DEFAULT = "https://docs.google.com/forms/d/e/1FAIpQLSdx3q5aZwN2Kc1eTjPnQ3psg8D5c8V52CzfCRmTkKz3E_ot1w/viewform?usp=pp_url&entry.1689892039={NAME}&entry.750308893={SHOP}";
+function instaCfg(){ return _docOverrides['insta_config'] || {}; }
+function instaCreators(){ var c=instaCfg().creators; return Array.isArray(c)?c:[]; }
+function isInstaCreator(name){ if(!name) return false; var n=String(name).trim().toLowerCase(); return instaCreators().some(function(x){ return String(x).trim().toLowerCase()===n; }); }
+function canInsta(){ return isOwner() || (!!me && isInstaCreator(me.name)); }
+function instaFormUrl(){ var u=instaCfg().formUrl; return (u&&String(u).trim())?String(u).trim():INSTA_FORM_DEFAULT; }
+function instaShotList(){ return instaCfg().shotList||""; }
+window._instaUpload=function(){
+  var url=instaFormUrl()
+    .replace(/\{NAME\}/g, encodeURIComponent((me&&me.name)||""))
+    .replace(/\{SHOP\}/g, encodeURIComponent((me&&me.store)||store.site||""));
+  // Same-window navigation keeps it in their browser and lets Google sign-in work.
+  window.location.href=url;
+};
+function viewInsta(){
+  if(!canInsta()) return viewHome();
+  let h=backbar("Home","#/");
+  h+=`<h1 class="page">Insta Uploads</h1><p class="sub">Film content for our Instagram and send the clips straight in.</p>`;
+  h+=`<div class="rowlist">`;
+  h+=`<div class="rowitem" onclick="location.hash='#/insta/filming'"><span class="ri-t">What needs filming</span><span class="chev">›</span></div>`;
+  h+=`<div class="rowitem" onclick="window._instaUpload()"><span class="ri-t">Upload clips</span><span class="chev">↗</span></div>`;
+  h+=`</div>`;
+  h+=`<p class="muted" style="font-size:12.5px;margin-top:12px">Hold the phone upright. Send original files. You'll sign in to Google once to upload.</p>`;
+  if(isOwner()){ h+=`<div class="own-edit-row"><button class="own-edit-btn" onclick="location.hash='#/edit/insta'">✎ Edit what needs filming &amp; settings</button></div>`; }
+  shell(h);
+}
+function viewInstaFilming(){
+  if(!canInsta()) return viewHome();
+  let h=backbar("Insta Uploads","#/insta");
+  h+=`<h1 class="page">What needs filming</h1>`;
+  var sl=instaShotList();
+  if(sl && sl.trim()){ h+=`<div class="note-box" style="white-space:pre-wrap;line-height:1.5">${esc(sl)}</div>`; }
+  else { h+=`<p class="muted">Nothing listed just now. Check back soon, or ask Simon.</p>`; }
+  h+=`<div class="rowlist" style="margin-top:16px"><div class="rowitem" onclick="window._instaUpload()"><span class="ri-t">Upload clips</span><span class="chev">↗</span></div></div>`;
+  if(isOwner()){ h+=`<div class="own-edit-row"><button class="own-edit-btn" onclick="location.hash='#/edit/insta'">✎ Edit this list</button></div>`; }
+  shell(h);
+}
+function viewEditInsta(){
+  if(!isOwner()) return viewHome();
+  var c=instaCfg();
+  let h=backbar("Insta Uploads","#/insta");
+  h+=`<h1 class="page">Insta Uploads settings</h1><p class="sub">Write what needs filming. Changes go live for everyone straight away.</p>`;
+  h+=`<div id="instaMsg"></div>`;
+  h+=`<div class="field"><label class="q">What needs filming</label><textarea id="instaShot" rows="9" placeholder="e.g.\n- Pancakes being flipped on the grill\n- The new Christmas gifts on the shelf\n- A busy, happy Saturday vibe">${esc(c.shotList||"")}</textarea></div>`;
+  h+=`<div class="field"><label class="q">Upload form link (advanced - leave blank for the default)</label><input type="text" id="instaUrl" placeholder="Default Laughing Dog upload form" value="${esc(c.formUrl||"")}"></div>`;
+  h+=`<p class="muted" style="font-size:12px;margin:-4px 0 14px">Tip: put {NAME} and {SHOP} in the link and the app fills them in. You set who can upload by ticking people in Staff &amp; positions.</p>`;
+  h+=`<button class="pill cta" onclick="window._instaSave()">Save &amp; publish to everyone</button>`;
+  shell(h);
+}
+window._instaSave=async function(){
+  if(!isOwner()) return;
+  var shot=($("#instaShot")&&$("#instaShot").value)||"";
+  var url=($("#instaUrl")&&$("#instaUrl").value.trim())||"";
+  var cur=instaCfg();
+  var payload=Object.assign({}, cur, { title:"Insta Uploads", kind:"insta", shotList:shot, formUrl:url, updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' });
+  try{
+    await db.collection("content_docs").doc("insta_config").set(payload, {merge:true});
+    ownerMsg("instaMsg","ok","Saved. Everyone's app now shows this.");
+  }catch(e){ ownerMsg("instaMsg","err","Couldn't save: "+(e.message||e)); }
+};
+window._setInstaCreator=async function(name, on){
+  if(!isOwner() || !name) return;
+  var cur=instaCfg();
+  var list=Array.isArray(cur.creators)?cur.creators.slice():[];
+  var ln=String(name).trim().toLowerCase();
+  list=list.filter(function(x){ return String(x).trim().toLowerCase()!==ln; });
+  if(on) list.push(name);
+  var payload=Object.assign({}, cur, { title:"Insta Uploads", kind:"insta", creators:list, updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' });
+  try{
+    await db.collection("content_docs").doc("insta_config").set(payload, {merge:true});
+    ownerMsg("staffMsg","ok",(name||"They")+(on?" can now upload Insta clips.":" can no longer upload Insta clips."));
+  }catch(e){ ownerMsg("staffMsg","err","Couldn't save: "+(e.message||e)); }
+};
+window._setInstaCreatorEl=function(el){ try{ window._setInstaCreator(el.getAttribute('data-name')||'', !!el.checked); }catch(e){} };
 function sendLabelFor(o){ return o.send || cleanItemName(o.show); }
 let _orderItems=[];
 function viewOrder(key){
@@ -2484,6 +2572,7 @@ function renderStaffList(){
         <div><div style="font-weight:600">${esc(s.name||"(no name)")}</div><div class="muted" style="font-size:12.5px">${esc(s.store||"")}</div></div>
         <select class="sel" style="max-width:180px" onchange="window._setStaffPos('${s.id}', this.value)">${opts}</select>
       </div>
+      <label class="wchk" style="margin:10px 0 2px"><input type="checkbox" ${isInstaCreator(s.name)?'checked':''} data-name="${esc(s.name||'')}" onchange="window._setInstaCreatorEl(this)"> <span>Content creator (can upload Insta clips)</span></label>
       <div class="own-tools"><button class="del" onclick="window._removeStaff('${s.id}','${esc((s.name||'').replace(/'/g,''))}')">Remove from app</button></div>
     </div>`;
   }).join("");
@@ -3353,6 +3442,7 @@ function router(){
     if(!isOwner()) return viewHome();
     if(parts[1]==="emails") return viewEditEmails(k);
     if(parts[1]==="staff") return viewEditStaff();
+    if(parts[1]==="insta") return viewEditInsta();
     return viewHome();
   }
   if(root==="order") return viewOrder(parts[1]);
@@ -3367,6 +3457,11 @@ function router(){
   if(root==="manage") return viewManage();
   if(root==="form") return viewForm(parts[1]);
   if(root==="doc") return viewDoc(parts[1]);
+  if(root==="insta"){
+    if(!canInsta()) return viewHome();
+    if(parts[1]==="filming") return viewInstaFilming();
+    return viewInsta();
+  }
   if(root==="bookings"){
     if(!bkCanUse()) return viewHome();
     if(parts[1]==="list") return viewBookingsList();
