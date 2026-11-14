@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.13b";
+const BUILD = "2026.11.14a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2256,7 +2256,7 @@ function viewDoc(key){
 function viewStub(x){ shell(backbar("Home","#/")+`<h1 class="page">Coming soon</h1><div class="note-box">"${esc(x)}" is being built.</div>`); }
 
 /* =========================================================
-   OWNER EDITING (Simon only) — edit order lists, reference
+   OWNER EDITING (Simon only): edit order lists, reference
    docs, daily forms and order email recipients from inside
    the app. Writes the SAME Firestore shapes as the separate
    editor app, so both stay compatible. Everyone's app updates.
@@ -2348,7 +2348,7 @@ window._odDelSec=function(i){ _odSync(); if(!confirm("Delete this whole section?
 window._odSave=async function(){
   _odSync(); const d=_ownerDoc;
   if(!(d.title||"").trim()){ ownerMsg("odMsg","err","Give the list a name first."); return; }
-  if(!fbReady){ ownerMsg("odMsg","err","No connection yet — try again once the app is online."); return; }
+  if(!fbReady){ ownerMsg("odMsg","err","No connection yet. Try again once the app is online."); return; }
   const btn=document.getElementById("odSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
   const payload={ key:d.key, title:d.title.trim(), sub:(d.sub||"").trim(),
     store:docStoreFor(d.key), kind:'doc', supplierMode:!!d.supplierMode,
@@ -2452,7 +2452,7 @@ window._ofReset=function(){ if(!confirm("Reset this form back to the original bu
 window._ofSave=async function(){
   _ofSync(); const d=_ownerForm; const def=FORMS[d.type];
   if(!(d.title||"").trim()){ ownerMsg("ofMsg","err","Give the form a name first."); return; }
-  if(!fbReady){ ownerMsg("ofMsg","err","No connection yet — try again once the app is online."); return; }
+  if(!fbReady){ ownerMsg("ofMsg","err","No connection yet. Try again once the app is online."); return; }
   const fields=d.fields.filter(f=>{
     if(f.type==='section') return (f.label||'').trim()!=='';
     if(f.type==='checklist') return (f.items||[]).some(x=>x&&String(x).trim());
@@ -2531,7 +2531,7 @@ window._oeSave=async function(){
   const clean=_ownerEmails.emails.map(e=>String(e||"").trim()).filter(Boolean);
   const bad=clean.filter(e=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
   if(bad.length){ ownerMsg("oeMsg","err","Check this address: "+bad[0]); return; }
-  if(!fbReady){ ownerMsg("oeMsg","err","No connection yet — try again once the app is online."); return; }
+  if(!fbReady){ ownerMsg("oeMsg","err","No connection yet. Try again once the app is online."); return; }
   const btn=document.getElementById("oeSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
   const id=recipKey(_ownerEmails.key);
   try{
@@ -3153,18 +3153,26 @@ async function bkAutoExtend(list){
   }catch(e){} finally{ _bkExtendBusy=false; }
 }
 
-let _bkUnsub=null, _bkUnsubSite='', _bkTodayList=[];
+let _bkUnsub=null, _bkUnsubSite='', _bkTodayList=[], _bkAllSite=[];
+// A booking the customer cancelled (email link or app) keeps its doc with
+// status 'cancelled' (cancelledBy 'customer'), so it must not count as live.
+function bkIsCancelled(b){ var s=String((b&&b.status)||'').toLowerCase(); return s==='cancelled' || s==='canceled' || (b&&b.cancelled===true); }
+// Rebuild today's list from the last snapshot (also used when the date rolls over).
+function bkRefilterToday(){
+  _bkTodayList = _bkAllSite
+    .filter(function(b){ return b.dateISO===bkTodayISO() && !bkIsCancelled(b); })
+    .sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+}
 // Switching site: drop the old site's listener so today's strips follow the new site.
-function bkResetSite(){ if(_bkUnsub){ try{_bkUnsub()}catch(e){} } _bkUnsub=null; _bkUnsubSite=''; _bkTodayList=[]; }
+function bkResetSite(){ if(_bkUnsub){ try{_bkUnsub()}catch(e){} } _bkUnsub=null; _bkUnsubSite=''; _bkTodayList=[]; _bkAllSite=[]; }
 function startBookingsToday(){
   if(_bkUnsub && _bkUnsubSite!==bkSite()) bkResetSite();
   if(_bkUnsub || !db) return;
   _bkUnsubSite = bkSite();
   _bkUnsub = db.collection('bookings').where('site','==',_bkUnsubSite)
     .onSnapshot(function(snap){
-      _bkTodayList = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
-        .filter(function(b){ return b.dateISO===bkTodayISO(); })
-        .sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+      _bkAllSite = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      bkRefilterToday();
       if(location.hash==='#/' || location.hash===''){ viewHome(); }
       if($("#bkSod")) renderSodBookings();
     }, function(){ bkResetSite(); });  // e.g. not signed in yet: retry on next call / auth change
@@ -3196,13 +3204,21 @@ function startEventsWatch(){
     }, function(){});
   }
   if(_evUnsub || !db) return;
-  _evUnsub = db.collection('events').where('location','==','Worthing').onSnapshot(function(snap){
-    var from=bkTodayISO(), to=evAddDaysISO(7);
-    _evList = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
-      .filter(function(e){ return e.active!==false && e.date && e.date>=from && e.date<=to && evIsEvening(e); })
-      .sort(function(a,b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); });
+  // The hub saves location as 'Worthing', 'Brighton' or 'Both' (blank also means
+  // Both), so 'Both' events count for Worthing too.
+  _evUnsub = db.collection('events').where('location','in',['Worthing','Both','']).onSnapshot(function(snap){
+    _evAll = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    evRefilter();
     if(store.site==='Worthing' && (location.hash==='#/' || location.hash==='')) viewHome();
   }, function(){});
+}
+var _evAll=[];
+// Next 7 days of evening events from the last snapshot (re-run when the date changes).
+function evRefilter(){
+  var from=bkTodayISO(), to=evAddDaysISO(7);
+  _evList = _evAll
+    .filter(function(e){ return e.active!==false && e.date && e.date>=from && e.date<=to && evIsEvening(e); })
+    .sort(function(a,b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); });
 }
 function evStripsHtml(){
   if(!_evList.length) return '';
@@ -3267,9 +3283,11 @@ function bkRenderList(list){
   var b=$("#bkList"); if(!b) return;
   if(!list.length){ b.innerHTML='<p class="muted">No upcoming bookings.</p>'; return; }
   b.innerHTML = list.map(function(bk){
-    return '<div class="bk-row" data-id="'+bk.id+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #eee;border-radius:14px;padding:14px 16px;margin:8px 0;">'
+    var cx = bkIsCancelled(bk);
+    return '<div class="bk-row" data-id="'+bk.id+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #eee;border-radius:14px;padding:14px 16px;margin:8px 0;'+(cx?'opacity:.55;':'')+'">'
       +'<div style="min-width:0;">'
-      +'<div style="font-weight:800;">'+esc(bkFmtDate(bk.dateISO))+' · '+esc(bkFmtTime(bk.time))+(bk.seriesId&&bk.repeat&&bk.repeat!=='none'?' <span style="font-weight:700;font-size:11px;color:#8a6d3b;background:#fbeecf;padding:2px 7px;border-radius:10px;vertical-align:middle;">↻ '+esc(bkRepeatLabel(bk.repeat))+'</span>':'')+'</div>'
+      +(cx?'<div style="font-weight:800;font-size:11px;letter-spacing:.06em;color:#B42318;">CANCELLED BY CUSTOMER</div>':'')
+      +'<div style="font-weight:800;'+(cx?'text-decoration:line-through;':'')+'">'+esc(bkFmtDate(bk.dateISO))+' · '+esc(bkFmtTime(bk.time))+(bk.seriesId&&bk.repeat&&bk.repeat!=='none'?' <span style="font-weight:700;font-size:11px;color:#8a6d3b;background:#fbeecf;padding:2px 7px;border-radius:10px;vertical-align:middle;">↻ '+esc(bkRepeatLabel(bk.repeat))+'</span>':'')+'</div>'
       +'<div style="font-size:14px;margin-top:2px;">'+bk.people+' people · '+esc(bk.name||'')+'</div>'
       +'<div style="font-size:12px;color:#888;margin-top:2px;">'+(bk.phone?esc(bk.phone):'')+(bk.email?(' · '+esc(bk.email)):'')+'</div>'
       +(bk.notes?('<div style="font-size:12px;color:#aaa;margin-top:2px;">'+esc(bk.notes)+'</div>'):'')
@@ -3471,6 +3489,39 @@ function router(){
   return viewHome();
 }
 window.addEventListener("hashchange",router);
+
+/* Day rollover: a tab or home-screen app left open overnight must move on to
+   the new day's rota, daily status, bookings and events, instead of showing
+   yesterday's. Checked every minute and whenever the app comes back on screen.
+   Only views with nothing typed into them are re-drawn. */
+var _ldDay=localDate(), _ldHiddenAt=0;
+function ldSafeToRedraw(){
+  var h=location.hash||"#/";
+  return h==="#/" || h==="#" || /^#\/(formcheck|bookings(\/list)?)$/.test(h);
+}
+function ldRedraw(){
+  try{ if(ldSafeToRedraw()) router(); else if($("#bkSod")) renderSodBookings(); }catch(e){}
+}
+function checkDayRollover(){
+  var d=localDate();
+  if(d===_ldDay) return false;
+  _ldDay=d;
+  try{ resetStatusSub(); subscribeRoleData(); }catch(e){}
+  try{ bkRefilterToday(); }catch(e){}
+  try{ evRefilter(); }catch(e){}
+  ldRedraw();
+  return true;
+}
+setInterval(checkDayRollover, 60*1000);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState!=='visible'){ _ldHiddenAt=Date.now(); return; }
+  var rolled=checkDayRollover();
+  // Back after a while on the same day: redraw so time-based checks (missed
+  // Start/End of Day, today's bookings still to come) are current.
+  if(!rolled && _ldHiddenAt && Date.now()-_ldHiddenAt > 15*60*1000) ldRedraw();
+  _ldHiddenAt=0;
+});
+window.addEventListener('focus', function(){ checkDayRollover(); });
 
 /* auth state */
 if(auth){
