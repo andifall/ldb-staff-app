@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.16a";
+const BUILD = "2026.11.18a";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -1230,6 +1230,7 @@ function viewHome(){
   let h = `<p class="eyebrow">${esc(store.site)}</p><h1 class="page">Staff Hub</h1><p class="sub">Everything you need for your shift. Tap a section to open it.</p>`;
   if(bkCanUse()){ startBookingsToday(); h += bkTodayStripsHtml(); }
   if(store.site==='Worthing'){ startEventsWatch(); h += evStripsHtml(); }
+  h += instaReminderHtml();
   h += `<div class="hub-grid">`;
   HUBS.forEach(hub=>{
     if(hub.bk && !bkCanUse()) return;
@@ -1982,6 +1983,8 @@ function subscribeContentDocs(){
     _docOverrides=o;
     const h=location.hash||"";
     if(/^#\/(order|doc)\//.test(h)) router();
+    // Shot list changed: refresh the filming list, and the reminder on the front page.
+    else if(/^#\/insta\/filming/.test(h) || h==="" || h==="#" || h==="#/") router();
   }, err=>{ console.warn("content_docs:", err && err.message); });
   db.collection("content_forms").onSnapshot(snap=>{
     const o={}; snap.forEach(d=>{ const x=d.data()||{}; o[d.id]=x; });
@@ -2064,6 +2067,30 @@ function isInstaCreator(name){ if(!name) return false; var n=String(name).trim()
 function canInsta(){ return isOwner() || hasPerm('contentCreator'); }
 function instaFormUrl(){ var u=instaCfg().formUrl; return (u&&String(u).trim())?String(u).trim():INSTA_FORM_DEFAULT; }
 function instaShotList(){ return instaCfg().shotList||""; }
+/* The shot list is a checklist: [{id, text, done, remind}].
+   done   = Simon has ticked it off.
+   remind = show it on the front page of everyone who films ("These shots need doing").
+   An older free-text list (shotList) is read as one shot per line until the checklist is first saved. */
+function instaShots(){
+  var c=instaCfg();
+  if(Array.isArray(c.shots)) return c.shots.filter(function(x){ return x && String(x.text||"").trim(); }).map(function(x){ return { id:String(x.id), text:String(x.text).trim(), done:!!x.done, remind:!!x.remind }; });
+  return String(c.shotList||"").split(/\n+/).map(function(l){ return l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,"").trim(); }).filter(Boolean)
+    .map(function(t,i){ return { id:"l"+i, text:t, done:false, remind:false }; });
+}
+function instaJoin(list){
+  if(list.length<=1) return list.join("");
+  return list.slice(0,-1).join(", ")+" and "+list[list.length-1];
+}
+/* Front page reminder, only for people who film (and Simon). */
+function instaReminderHtml(){
+  if(!canInsta()) return "";
+  var need=instaShots().filter(function(x){ return x.remind && !x.done; });
+  if(!need.length) return "";
+  return `<div onclick="location.hash='#/insta/filming'" style="cursor:pointer;background:#FFF3DC;border:1px solid var(--golden);border-radius:16px;padding:13px 15px;margin:0 0 16px">
+    <div style="font-weight:700;color:var(--bark);font-size:15px">🎬 ${need.length===1?"This shot needs":"These shots need"} doing</div>
+    <div style="color:var(--bark70);font-size:14.5px;margin-top:4px;line-height:1.45">${esc(instaJoin(need.map(function(x){ return x.text; })))}</div>
+    <div style="color:var(--bark55);font-size:12.5px;margin-top:6px">Tap to see the full list ›</div></div>`;
+}
 window._instaUpload=function(){
   var url=instaFormUrl()
     .replace(/\{NAME\}/g, encodeURIComponent((me&&me.name)||""))
@@ -2087,34 +2114,95 @@ function viewInstaFilming(){
   if(!canInsta()) return viewHome();
   let h=backbar("Insta Uploads","#/insta");
   h+=`<h1 class="page">What needs filming</h1>`;
-  var sl=instaShotList();
-  if(sl && sl.trim()){ h+=`<div class="note-box" style="white-space:pre-wrap;line-height:1.5">${esc(sl)}</div>`; }
-  else { h+=`<p class="muted">Nothing listed just now. Check back soon, or ask Simon.</p>`; }
+  var all=instaShots(), todo=all.filter(function(x){ return !x.done; }), done=all.filter(function(x){ return x.done; });
+  var row=function(x){
+    return `<div style="display:flex;gap:11px;align-items:flex-start;padding:11px 2px;border-bottom:1px solid var(--bark10)">
+      <span style="flex:none;width:22px;height:22px;border-radius:6px;border:2px solid ${x.done?'#3E8E55':'var(--bark55)'};background:${x.done?'#3E8E55':'transparent'};color:#fff;font-size:15px;line-height:18px;text-align:center;margin-top:1px">${x.done?'✓':''}</span>
+      <span style="flex:1;font-size:15.5px;line-height:1.4;color:var(--bark);${x.done?'text-decoration:line-through;opacity:.55':''}">${esc(x.text)}${x.remind&&!x.done?' <span style="background:#FFF3DC;border:1px solid var(--golden);border-radius:8px;font-size:11px;font-weight:700;padding:1px 7px;white-space:nowrap">needed now</span>':''}</span></div>`;
+  };
+  if(!all.length){ h+=`<p class="muted">Nothing listed just now. Check back soon, or ask Simon.</p>`; }
+  else {
+    if(todo.length){ h+=`<div>${todo.map(row).join("")}</div>`; }
+    else { h+=`<p class="muted">Everything on the list is done. Nice work.</p>`; }
+    if(done.length){ h+=`<p class="muted" style="font-size:12.5px;margin:18px 0 2px;font-weight:700;letter-spacing:.4px">DONE</p><div>${done.map(row).join("")}</div>`; }
+  }
   h+=`<div class="rowlist" style="margin-top:16px"><div class="rowitem" onclick="window._instaUpload()"><span class="ri-t">Upload clips</span><span class="chev">↗</span></div></div>`;
   if(isOwner()){ h+=`<div class="own-edit-row"><button class="own-edit-btn" onclick="location.hash='#/edit/insta'">✎ Edit this list</button></div>`; }
   shell(h);
 }
 function viewEditInsta(){
   if(!isOwner()) return viewHome();
-  var c=instaCfg();
+  var c=instaCfg(), shots=instaShots();
+  var urlVal=(window._instaUrlDraft!=null)?window._instaUrlDraft:(c.formUrl||"");
   let h=backbar("Insta Uploads","#/insta");
-  h+=`<h1 class="page">Insta Uploads settings</h1><p class="sub">Write what needs filming. Changes go live for everyone straight away.</p>`;
+  h+=`<h1 class="page">Insta Uploads settings</h1><p class="sub">Your shot list. Every change saves and goes live for everyone straight away.</p>`;
   h+=`<div id="instaMsg"></div>`;
-  h+=`<div class="field"><label class="q">What needs filming</label><textarea id="instaShot" rows="9" placeholder="e.g.\n- Pancakes being flipped on the grill\n- The new Christmas gifts on the shelf\n- A busy, happy Saturday vibe">${esc(c.shotList||"")}</textarea></div>`;
-  h+=`<div class="field"><label class="q">Upload form link (advanced - leave blank for the default)</label><input type="text" id="instaUrl" placeholder="Default Laughing Dog upload form" value="${esc(c.formUrl||"")}"></div>`;
+  h+=`<div class="field"><label class="q">Shots to film</label>`;
+  if(shots.length){
+    h+=`<div style="display:flex;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--bark55);padding:0 2px 4px"><span style="width:40px">DONE</span><span style="flex:1"></span><span style="width:62px;text-align:center">FRONT PAGE</span><span style="width:34px"></span></div>`;
+    h+=shots.map(function(x){
+      return `<div style="display:flex;align-items:center;gap:0;padding:9px 2px;border-bottom:1px solid var(--bark10)">
+        <span style="width:40px;flex:none"><input type="checkbox" data-id="${esc(x.id)}" ${x.done?'checked':''} onchange="window._instaShotSet(this,'done')" style="width:22px;height:22px;accent-color:#3E8E55"></span>
+        <span style="flex:1;font-size:15px;line-height:1.35;color:var(--bark);${x.done?'text-decoration:line-through;opacity:.55':''}">${esc(x.text)}</span>
+        <span style="width:62px;flex:none;text-align:center"><input type="checkbox" data-id="${esc(x.id)}" ${x.remind?'checked':''} ${x.done?'disabled':''} onchange="window._instaShotSet(this,'remind')" style="width:22px;height:22px;accent-color:#E0A43A"></span>
+        <button data-id="${esc(x.id)}" onclick="window._instaShotRemove(this)" aria-label="Remove" style="width:34px;flex:none;appearance:none;border:none;background:none;font-size:18px;color:var(--bark55);cursor:pointer">✕</button></div>`;
+    }).join("");
+  } else {
+    h+=`<p class="muted" style="margin:0 0 8px">No shots yet. Add the first one below.</p>`;
+  }
+  h+=`<div style="display:flex;gap:8px;margin-top:12px"><input type="text" id="instaNew" placeholder="Add a shot, e.g. Pancakes being flipped" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();window._instaShotAdd();}"><button class="pill cta" style="flex:none" onclick="window._instaShotAdd()">Add</button></div>`;
+  h+=`<p class="help" style="margin:10px 0 0">Tick <b>Done</b> when you have the clip. Tick <b>Front page</b> to put a shot in the reminder on the front page of everyone who films: "These shots need doing".</p></div>`;
+  h+=`<div class="field"><label class="q">Upload form link (advanced - leave blank for the default)</label><input type="text" id="instaUrl" placeholder="Default Laughing Dog upload form" value="${esc(urlVal)}"></div>`;
   h+=`<p class="muted" style="font-size:12px;margin:-4px 0 14px">Tip: put {NAME} and {SHOP} in the link and the app fills them in. You set who can upload by ticking people in Staff &amp; positions.</p>`;
-  h+=`<button class="pill cta" onclick="window._instaSave()">Save &amp; publish to everyone</button>`;
+  h+=`<button class="pill cta" onclick="window._instaSave()">Save the form link</button>`;
   shell(h);
 }
-window._instaSave=async function(){
+/* Save the whole checklist. shotList (plain text of what's left) is kept in step for older copies of the app. */
+window._instaSaveShots=async function(list, okMsg){
   if(!isOwner()) return;
-  var shot=($("#instaShot")&&$("#instaShot").value)||"";
-  var url=($("#instaUrl")&&$("#instaUrl").value.trim())||"";
+  var u=$("#instaUrl"); if(u) window._instaUrlDraft=u.value;
   var cur=instaCfg();
-  var payload=Object.assign({}, cur, { title:"Insta Uploads", kind:"insta", shotList:shot, formUrl:url, updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' });
+  var payload=Object.assign({}, cur, { title:"Insta Uploads", kind:"insta", shots:list,
+    shotList:list.filter(function(x){ return !x.done; }).map(function(x){ return "- "+x.text; }).join("\n"),
+    updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' });
+  _docOverrides['insta_config']=payload;   // show it at once; the live snapshot confirms it
+  if(/^#\/edit\/insta/.test(location.hash||"")) viewEditInsta();
   try{
     await db.collection("content_docs").doc("insta_config").set(payload, {merge:true});
-    ownerMsg("instaMsg","ok","Saved. Everyone's app now shows this.");
+    if(okMsg) ownerMsg("instaMsg","ok",okMsg);
+  }catch(e){ ownerMsg("instaMsg","err","Couldn't save: "+(e.message||e)); }
+};
+window._instaShotAdd=function(){
+  var el=$("#instaNew"); var t=(el&&el.value||"").trim(); if(!t) return;
+  var list=instaShots();
+  list.push({ id:"s"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36), text:t, done:false, remind:false });
+  window._instaSaveShots(list).then(function(){ var n=$("#instaNew"); if(n) n.focus(); });
+};
+window._instaShotSet=function(el, field){
+  var id=el.getAttribute('data-id'), on=!!el.checked;
+  var list=instaShots().map(function(x){
+    if(x.id!==id) return x;
+    var y=Object.assign({}, x); y[field]=on;
+    if(field==='done' && on) y.remind=false;   // a finished shot comes off the front page
+    return y;
+  });
+  window._instaSaveShots(list);
+};
+window._instaShotRemove=function(el){
+  var id=el.getAttribute('data-id');
+  var list=instaShots(), hit=list.filter(function(x){ return x.id===id; })[0];
+  if(!hit || !confirm('Remove "'+hit.text+'" from the list?')) return;
+  window._instaSaveShots(list.filter(function(x){ return x.id!==id; }));
+};
+window._instaSave=async function(){
+  if(!isOwner()) return;
+  var url=($("#instaUrl")&&$("#instaUrl").value.trim())||"";
+  var cur=instaCfg();
+  var payload=Object.assign({}, cur, { title:"Insta Uploads", kind:"insta", formUrl:url, updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' });
+  try{
+    await db.collection("content_docs").doc("insta_config").set(payload, {merge:true});
+    window._instaUrlDraft=null;
+    ownerMsg("instaMsg","ok","Saved the form link.");
   }catch(e){ ownerMsg("instaMsg","err","Couldn't save: "+(e.message||e)); }
 };
 window._setInstaCreator=async function(name, on){
