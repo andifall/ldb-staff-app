@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.18c";
+const BUILD = "2026.11.18d";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2162,6 +2162,7 @@ window._iuLoad=async function(folder){
     if(nav) h+=`<div class="own-edit-row">${nav}</div>`;
     var files=d.files||[];
     if(!files.length){ h+=`<p class="muted">${(d.folders||[]).length?"No files here. Open a folder above.":"Nothing has been uploaded yet."}</p>`; }
+    if(files.length){ h+=`<p class="muted" style="font-size:13px;margin:0 0 10px">${files.length} file${files.length===1?"":"s"} using ${_iuSize(files.reduce(function(n,f){ return n+(f.size||0); },0))}</p>`; }
     files.forEach(function(f){
       var meta=[_iuDate(f.createdTime),_iuDur(f.durationMs),_iuSize(f.size)].filter(Boolean).join(" · ");
       h+=`<div style="display:flex;gap:12px;background:#fff;border:1px solid var(--bark10);border-radius:14px;padding:10px;margin-bottom:10px;box-shadow:var(--shadow)">
@@ -2172,12 +2173,26 @@ window._iuLoad=async function(folder){
           <div style="display:flex;gap:8px;margin-top:auto;flex-wrap:wrap">
             <a href="${esc(PROXY+f.download)}" download style="background:var(--golden);color:var(--bark);font-weight:700;font-size:13px;padding:8px 14px;border-radius:999px;text-decoration:none">⬇ Download</a>
             ${f.driveUrl?`<a href="${esc(f.driveUrl)}" target="_blank" rel="noopener" style="border:1px solid var(--bark15);color:var(--bark70);font-weight:600;font-size:13px;padding:8px 12px;border-radius:999px;text-decoration:none">Open in Drive</a>`:""}
+            <button data-id="${esc(f.id)}" data-name="${esc(f.name)}" onclick="window._iuDelete(this)" style="appearance:none;border:1px solid #E7C4BF;background:#fff;color:var(--danger);font-weight:600;font-size:13px;padding:8px 12px;border-radius:999px;cursor:pointer">Delete</button>
           </div>
         </div></div>`;
     });
     if(d.more) h+=`<p class="muted" style="font-size:12.5px">Showing the newest 200.</p>`;
     box.innerHTML=h;
   }catch(e){ if($("#iuBody")) box.innerHTML=`<div class="own-msg err">Could not load: ${esc(e.message||e)}</div>`; }
+};
+window._iuDelete=async function(el){
+  var id=el.getAttribute('data-id'), name=el.getAttribute('data-name')||'this file';
+  if(!confirm('Delete "'+name+'"?\n\nIt goes to the bin in Google Drive, where it can be restored for 30 days.')) return;
+  el.disabled=true;
+  try{
+    var u=auth&&auth.currentUser; if(!u) throw new Error("Sign in again, then come back here.");
+    var r=await fetch(PROXY+"/insta-uploads/delete",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+(await u.getIdToken())},body:JSON.stringify({fileId:id})});
+    var d=await r.json().catch(function(){ return {}; });
+    if(!r.ok) throw new Error(d.error||("Failed ("+r.status+")"));
+    if(d.how==="moved") alert('Google would not let the app bin that file (only its owner can), so it has been moved into a folder called "'+d.binFolder+'" inside the uploads folder. It no longer shows here.');
+    window._iuLoad(_iuFolder);
+  }catch(e){ el.disabled=false; alert("Not deleted: "+(e.message||e)); }
 };
 function viewEditInsta(){
   if(!isOwner()) return viewHome();
