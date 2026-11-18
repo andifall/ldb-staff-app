@@ -337,7 +337,7 @@ const ADMIN_SCOPE = {
 
 /* ---------- State ---------- */
 const _mem = {};
-const BUILD = "2026.11.18a";
+const BUILD = "2026.11.18b";
 const store = {
   get site(){ try{ return localStorage.getItem("ld_site") || _mem.site || null; }catch(e){ return _mem.site || null; } },
   set site(v){ _mem.site=v; try{ localStorage.setItem("ld_site", v); }catch(e){} },
@@ -2067,15 +2067,16 @@ function isInstaCreator(name){ if(!name) return false; var n=String(name).trim()
 function canInsta(){ return isOwner() || hasPerm('contentCreator'); }
 function instaFormUrl(){ var u=instaCfg().formUrl; return (u&&String(u).trim())?String(u).trim():INSTA_FORM_DEFAULT; }
 function instaShotList(){ return instaCfg().shotList||""; }
-/* The shot list is a checklist: [{id, text, done, remind}].
+/* The shot list is a checklist: [{id, text, desc, done, remind}].
+   text   = the shot's title; desc = an optional line explaining it.
    done   = Simon has ticked it off.
    remind = show it on the front page of everyone who films ("These shots need doing").
    An older free-text list (shotList) is read as one shot per line until the checklist is first saved. */
 function instaShots(){
   var c=instaCfg();
-  if(Array.isArray(c.shots)) return c.shots.filter(function(x){ return x && String(x.text||"").trim(); }).map(function(x){ return { id:String(x.id), text:String(x.text).trim(), done:!!x.done, remind:!!x.remind }; });
+  if(Array.isArray(c.shots)) return c.shots.filter(function(x){ return x && String(x.text||"").trim(); }).map(function(x){ return { id:String(x.id), text:String(x.text).trim(), desc:String(x.desc||"").trim(), done:!!x.done, remind:!!x.remind }; });
   return String(c.shotList||"").split(/\n+/).map(function(l){ return l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,"").trim(); }).filter(Boolean)
-    .map(function(t,i){ return { id:"l"+i, text:t, done:false, remind:false }; });
+    .map(function(t,i){ return { id:"l"+i, text:t, desc:"", done:false, remind:false }; });
 }
 function instaJoin(list){
   if(list.length<=1) return list.join("");
@@ -2088,7 +2089,7 @@ function instaReminderHtml(){
   if(!need.length) return "";
   return `<div onclick="location.hash='#/insta/filming'" style="cursor:pointer;background:#FFF3DC;border:1px solid var(--golden);border-radius:16px;padding:13px 15px;margin:0 0 16px">
     <div style="font-weight:700;color:var(--bark);font-size:15px">🎬 ${need.length===1?"This shot needs":"These shots need"} doing</div>
-    <div style="color:var(--bark70);font-size:14.5px;margin-top:4px;line-height:1.45">${esc(instaJoin(need.map(function(x){ return x.text; })))}</div>
+    ${need.map(function(x){ return `<div style="margin-top:8px"><div style="font-weight:700;color:var(--bark);font-size:14.5px;line-height:1.3">${esc(x.text)}</div>${x.desc?`<div style="color:var(--bark70);font-size:13px;line-height:1.4;margin-top:1px">${esc(x.desc)}</div>`:''}</div>`; }).join("")}
     <div style="color:var(--bark55);font-size:12.5px;margin-top:6px">Tap to see the full list ›</div></div>`;
 }
 window._instaUpload=function(){
@@ -2118,7 +2119,7 @@ function viewInstaFilming(){
   var row=function(x){
     return `<div style="display:flex;gap:11px;align-items:flex-start;padding:11px 2px;border-bottom:1px solid var(--bark10)">
       <span style="flex:none;width:22px;height:22px;border-radius:6px;border:2px solid ${x.done?'#3E8E55':'var(--bark55)'};background:${x.done?'#3E8E55':'transparent'};color:#fff;font-size:15px;line-height:18px;text-align:center;margin-top:1px">${x.done?'✓':''}</span>
-      <span style="flex:1;font-size:15.5px;line-height:1.4;color:var(--bark);${x.done?'text-decoration:line-through;opacity:.55':''}">${esc(x.text)}${x.remind&&!x.done?' <span style="background:#FFF3DC;border:1px solid var(--golden);border-radius:8px;font-size:11px;font-weight:700;padding:1px 7px;white-space:nowrap">needed now</span>':''}</span></div>`;
+      <span style="flex:1;line-height:1.4;color:var(--bark);${x.done?'opacity:.55':''}"><span style="font-size:15.5px;font-weight:700;${x.done?'text-decoration:line-through':''}">${esc(x.text)}</span>${x.remind&&!x.done?' <span style="background:#FFF3DC;border:1px solid var(--golden);border-radius:8px;font-size:11px;font-weight:700;padding:1px 7px;white-space:nowrap">needed now</span>':''}${x.desc?`<span style="display:block;font-size:13.5px;color:var(--bark70);margin-top:2px">${esc(x.desc)}</span>`:''}</span></div>`;
   };
   if(!all.length){ h+=`<p class="muted">Nothing listed just now. Check back soon, or ask Simon.</p>`; }
   else {
@@ -2139,19 +2140,22 @@ function viewEditInsta(){
   h+=`<div id="instaMsg"></div>`;
   h+=`<div class="field"><label class="q">Shots to film</label>`;
   if(shots.length){
-    h+=`<div style="display:flex;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--bark55);padding:0 2px 4px"><span style="width:40px">DONE</span><span style="flex:1"></span><span style="width:62px;text-align:center">FRONT PAGE</span><span style="width:34px"></span></div>`;
+    h+=`<div style="display:flex;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--bark55);padding:0 2px 4px"><span style="width:40px">DONE</span><span style="flex:1"></span><span style="width:32px"></span><span style="width:62px;text-align:center">FRONT PAGE</span><span style="width:34px"></span></div>`;
     h+=shots.map(function(x){
       return `<div style="display:flex;align-items:center;gap:0;padding:9px 2px;border-bottom:1px solid var(--bark10)">
         <span style="width:40px;flex:none"><input type="checkbox" data-id="${esc(x.id)}" ${x.done?'checked':''} onchange="window._instaShotSet(this,'done')" style="width:22px;height:22px;accent-color:#3E8E55"></span>
-        <span style="flex:1;font-size:15px;line-height:1.35;color:var(--bark);${x.done?'text-decoration:line-through;opacity:.55':''}">${esc(x.text)}</span>
+        <span style="flex:1;line-height:1.35;color:var(--bark);${x.done?'opacity:.55':''}"><span style="font-size:15px;font-weight:700;${x.done?'text-decoration:line-through':''}">${esc(x.text)}</span>${x.desc?`<span style="display:block;font-size:13px;color:var(--bark70);margin-top:1px">${esc(x.desc)}</span>`:''}</span>
+        <button data-id="${esc(x.id)}" onclick="window._instaShotEdit(this)" aria-label="Edit" style="width:32px;flex:none;appearance:none;border:none;background:none;font-size:16px;color:var(--bark55);cursor:pointer">✎</button>
         <span style="width:62px;flex:none;text-align:center"><input type="checkbox" data-id="${esc(x.id)}" ${x.remind?'checked':''} ${x.done?'disabled':''} onchange="window._instaShotSet(this,'remind')" style="width:22px;height:22px;accent-color:#E0A43A"></span>
         <button data-id="${esc(x.id)}" onclick="window._instaShotRemove(this)" aria-label="Remove" style="width:34px;flex:none;appearance:none;border:none;background:none;font-size:18px;color:var(--bark55);cursor:pointer">✕</button></div>`;
     }).join("");
   } else {
     h+=`<p class="muted" style="margin:0 0 8px">No shots yet. Add the first one below.</p>`;
   }
-  h+=`<div style="display:flex;gap:8px;margin-top:12px"><input type="text" id="instaNew" placeholder="Add a shot, e.g. Pancakes being flipped" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();window._instaShotAdd();}"><button class="pill cta" style="flex:none" onclick="window._instaShotAdd()">Add</button></div>`;
-  h+=`<p class="help" style="margin:10px 0 0">Tick <b>Done</b> when you have the clip. Tick <b>Front page</b> to put a shot in the reminder on the front page of everyone who films: "These shots need doing".</p></div>`;
+  h+=`<div style="margin-top:14px"><input type="text" id="instaNew" placeholder="Shot title, e.g. Pancake flip" onkeydown="if(event.key==='Enter'){event.preventDefault();var d=document.getElementById('instaNewDesc');if(d)d.focus();}">
+    <input type="text" id="instaNewDesc" placeholder="Short description (optional), e.g. Close up, slow motion, from the grill side" style="margin-top:8px" onkeydown="if(event.key==='Enter'){event.preventDefault();window._instaShotAdd();}">
+    <button class="pill cta" style="margin-top:10px" onclick="window._instaShotAdd()">Add shot</button></div>`;
+  h+=`<p class="help" style="margin:10px 0 0">Tick <b>Done</b> when you have the clip. Tick <b>Front page</b> to put a shot in the reminder on the front page of everyone who films. Tap ✎ to change a title or description.</p></div>`;
   h+=`<div class="field"><label class="q">Upload form link (advanced - leave blank for the default)</label><input type="text" id="instaUrl" placeholder="Default Laughing Dog upload form" value="${esc(urlVal)}"></div>`;
   h+=`<p class="muted" style="font-size:12px;margin:-4px 0 14px">Tip: put {NAME} and {SHOP} in the link and the app fills them in. You set who can upload by ticking people in Staff &amp; positions.</p>`;
   h+=`<button class="pill cta" onclick="window._instaSave()">Save the form link</button>`;
@@ -2163,7 +2167,7 @@ window._instaSaveShots=async function(list, okMsg){
   var u=$("#instaUrl"); if(u) window._instaUrlDraft=u.value;
   var cur=instaCfg();
   var payload=Object.assign({}, cur, { title:"Insta Uploads", kind:"insta", shots:list,
-    shotList:list.filter(function(x){ return !x.done; }).map(function(x){ return "- "+x.text; }).join("\n"),
+    shotList:list.filter(function(x){ return !x.done; }).map(function(x){ return "- "+x.text+(x.desc?": "+x.desc:""); }).join("\n"),
     updatedAtLocal:new Date().toISOString(), updatedBy:(me&&me.name)||'Owner' });
   _docOverrides['insta_config']=payload;   // show it at once; the live snapshot confirms it
   if(/^#\/edit\/insta/.test(location.hash||"")) viewEditInsta();
@@ -2174,8 +2178,9 @@ window._instaSaveShots=async function(list, okMsg){
 };
 window._instaShotAdd=function(){
   var el=$("#instaNew"); var t=(el&&el.value||"").trim(); if(!t) return;
+  var de=$("#instaNewDesc"); var ds=(de&&de.value||"").trim();
   var list=instaShots();
-  list.push({ id:"s"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36), text:t, done:false, remind:false });
+  list.push({ id:"s"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36), text:t, desc:ds, done:false, remind:false });
   window._instaSaveShots(list).then(function(){ var n=$("#instaNew"); if(n) n.focus(); });
 };
 window._instaShotSet=function(el, field){
@@ -2187,6 +2192,14 @@ window._instaShotSet=function(el, field){
     return y;
   });
   window._instaSaveShots(list);
+};
+window._instaShotEdit=function(el){
+  var id=el.getAttribute('data-id');
+  var list=instaShots(), hit=list.filter(function(x){ return x.id===id; })[0];
+  if(!hit) return;
+  var t=prompt('Shot title', hit.text); if(t==null) return; t=t.trim(); if(!t) return;
+  var d=prompt('Short description (leave blank for none)', hit.desc||''); if(d==null) return;
+  window._instaSaveShots(list.map(function(x){ return x.id!==id ? x : Object.assign({}, x, { text:t, desc:d.trim() }); }));
 };
 window._instaShotRemove=function(el){
   var id=el.getAttribute('data-id');
